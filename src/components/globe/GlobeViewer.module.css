@@ -1,0 +1,201 @@
+.container {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  background: #030712;
+  overflow: hidden;
+}
+
+.cesiumContainer {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* Hide Cesium UI */
+.cesiumContainer :global(.cesium-viewer-toolbar),
+.cesiumContainer :global(.cesium-viewer-animationContainer),
+.cesiumContainer :global(.cesium-viewer-timelineContainer),
+.cesiumContainer :global(.cesium-viewer-bottom),
+.cesiumContainer :global(.cesium-viewer-fullscreenContainer),
+.cesiumContainer :global(.cesium-credit-logoContainer),
+.cesiumContainer :global(.cesium-credit-expand-link),
+.cesiumContainer :global(.cesium-widget-credits) {
+  display: none !important;
+}
+
+.panel {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 200;
+  background: rgba(3, 7, 18, 0.95);
+  border: 1px solid rgba(248, 250, 252, 0.2);
+  border-radius: 8px;
+  padding: 20px;
+  color: #f8fafc;
+  min-width: 280px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.panel h3 {
+  font-size: 0.9rem;
+  letter-spacing: 0.1em;
+  margin-bottom: 15px;
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.info {
+  font-size: 0.7rem;
+  color: rgba(248, 250, 252, 0.6);
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+
+.cache {
+  font-size: 0.65rem;
+  color: rgba(248, 250, 252, 0.4);
+  margin-bottom: 15px;
+}
+
+.status {
+  font-size: 0.75rem;
+  padding: 8px 12px;
+  background: rgba(248, 250, 252, 0.05);
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+
+.status.recording {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.panel button {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: transparent;
+  border: 1px solid rgba(248, 250, 252, 0.3);
+  color: #f8fafc;
+  font-family: inherit;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.panel button:hover:not(:disabled) {
+  border-color: #fbbf24;
+  color: #fbbf24;
+}
+
+.panel button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.panel button.primary {
+  background: #fbbf24;
+  border-color: #fbbf24;
+  color: #030712;
+}
+
+.panel button.primary:hover:not(:disabled) {
+  background: #f59e0b;
+}
+
+.clearCache {
+  margin-top: 10px !important;
+  font-size: 0.65rem !important;
+  opacity: 0.6;
+}
+
+.progress {
+  height: 4px;
+  background: rgba(248, 250, 252, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.progressBar {
+  height: 100%;
+  background: #fbbf24;
+  transition: width 0.1s ease;
+}
+
+.altitude {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  font-size: 0.7rem;
+  color: rgba(248, 250, 252, 0.6);
+  z-index: 100;
+  text-align: right;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.altValue {
+  font-size: 1.2rem;
+  color: #f8fafc;
+  display: block;
+}
+
+.frameCounter {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  font-size: 0.8rem;
+  color: #f87171;
+  z-index: 100;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.vignette {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 0%, transparent 60%, rgba(3, 7, 18, 0.5) 100%);
+  pointer-events: none;
+  z-index: 50;
+}
+
+/* Deep space subtle background - very light effect */
+.nebulaBackground {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 120% 100% at 80% 20%, rgba(88, 28, 135, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse 100% 80% at 20% 80%, rgba(30, 64, 175, 0.06) 0%, transparent 45%);
+  mix-blend-mode: screen;
+  opacity: 0.5;
+}
+
+/* Earth glow - disabled, Cesium handles atmosphere */
+.earthGlow {
+  display: none;
+}
+
+/* Cloud traversal effect */
+.cloudLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  background:
+    /* Main cloud layer - white fog */
+    radial-gradient(ellipse 80% 60% at 30% 40%, rgba(255, 255, 255, 0.9) 0%, transparent 50%),
+    radial-gradient(ellipse 70% 50% at 70% 30%, rgba(255, 255, 255, 0.85) 0%, transparent 45%),
+    radial-gradient(ellipse 90% 70% at 50% 60%, rgba(255, 255, 255, 0.8) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 40% at 20% 70%, rgba(255, 255, 255, 0.75) 0%, transparent 40%),
+    radial-gradient(ellipse 50% 50% at 80% 65%, rgba(255, 255, 255, 0.7) 0%, transparent 45%),
+    /* Base fog layer */
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.6) 50%, rgba(255, 255, 255, 0.3) 100%);
+  transition: opacity 0.1s ease-out;
+}

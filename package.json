@@ -1,0 +1,45 @@
+{
+  "name": "earth-journey",
+  "version": "1.0.0",
+  "description": "Cinematic 3D Earth flight animation from London to Shenzhen with video recording",
+  "private": false,
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "cesium": "^1.137.0",
+    "next": "^16.1.4",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "^16.1.4",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nicekate/earth-journey.git"
+  },
+  "keywords": [
+    "cesium",
+    "globe",
+    "animation",
+    "video-recording",
+    "3d-earth",
+    "flight-animation"
+  ],
+  "author": "Jin Chen"
+}
