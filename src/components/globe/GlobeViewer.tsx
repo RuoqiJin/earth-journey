@@ -2,10 +2,15 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
+  animations,
+  getDefaultAnimation,
+  type AnimationProject,
+  type FlightConfig,
+  type GlobeLineConfig,
+  type Location,
   LOCATIONS,
-  ANIMATION_CONFIG,
-  type CameraPosition,
-} from './types'
+} from '@/animations'
+import { FlightAnimator, GlobeLineAnimator } from './animators'
 import styles from './GlobeViewer.module.css'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -15,14 +20,16 @@ declare global {
   }
 }
 
-// Get Cesium token from environment variable
 const CESIUM_TOKEN = process.env.NEXT_PUBLIC_CESIUM_TOKEN || ''
 
 export default function GlobeViewer() {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<any>(null)
-  const initedRef = useRef(false) // Prevent Strict Mode double initialization
+  const initedRef = useRef(false)
+  const flightLineEntityRef = useRef<any>(null)
 
+  // Animation state
+  const [currentAnimation, setCurrentAnimation] = useState<AnimationProject>(getDefaultAnimation())
   const [status, setStatus] = useState('Loading Cesium...')
   const [isReady, setIsReady] = useState(false)
   const [isPreview, setIsPreview] = useState(false)
@@ -31,27 +38,30 @@ export default function GlobeViewer() {
   const [progress, setProgress] = useState(0)
   const [currentFrame, setCurrentFrame] = useState(0)
   const [altitude, setAltitude] = useState('--')
-  const [cloudOpacity, setCloudOpacity] = useState(0) // Cloud layer opacity
+  const [cloudOpacity, setCloudOpacity] = useState(0)
 
   // Recording state
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
   const isPausedRef = useRef(false)
 
-  const totalDuration = ANIMATION_CONFIG.segments.reduce((sum, s) => sum + s.duration, 0)
-  const totalFrames = totalDuration * ANIMATION_CONFIG.fps
+  // Create animator based on type
+  const getAnimator = useCallback(() => {
+    if (currentAnimation.type === 'flight') {
+      return new FlightAnimator(currentAnimation.config as FlightConfig)
+    } else {
+      return new GlobeLineAnimator(currentAnimation.config as GlobeLineConfig)
+    }
+  }, [currentAnimation])
 
-  // Load Cesium from CDN
+  // Load Cesium
   useEffect(() => {
-    // Prevent Strict Mode double initialization
     if (initedRef.current || viewerRef.current) return
     initedRef.current = true
 
     async function loadCesiumScript(): Promise<void> {
-      // Check if already loaded
       if (window.Cesium) return
 
-      // Add CSS
       if (!document.querySelector('link[href*="cesium"]')) {
         const link = document.createElement('link')
         link.rel = 'stylesheet'
@@ -59,10 +69,8 @@ export default function GlobeViewer() {
         document.head.appendChild(link)
       }
 
-      // Add script
       return new Promise((resolve, reject) => {
         if (document.querySelector('script[src*="Cesium.js"]')) {
-          // Wait for it to load
           const checkInterval = setInterval(() => {
             if (window.Cesium) {
               clearInterval(checkInterval)
@@ -88,15 +96,11 @@ export default function GlobeViewer() {
         }
 
         await loadCesiumScript()
-
         if (!containerRef.current) return
 
         const Cesium = window.Cesium
-
-        // Set token
         Cesium.Ion.defaultAccessToken = CESIUM_TOKEN
 
-        // Create viewer with cinematic settings
         const viewer = new Cesium.Viewer(containerRef.current, {
           animation: false,
           timeline: false,
@@ -109,12 +113,10 @@ export default function GlobeViewer() {
           infoBox: false,
           selectionIndicator: false,
           creditContainer: document.createElement('div'),
-          imageryProvider: false, // Disable default layer, add manually later
+          imageryProvider: false,
           terrainProvider: Cesium.createWorldTerrain(),
-          // Deep space nebula background
           skyBox: new Cesium.SkyBox({
             sources: {
-              // Use Tycho star map (Cesium default)
               positiveX: 'https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Assets/Textures/SkyBox/tycho2t3_80_px.jpg',
               negativeX: 'https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Assets/Textures/SkyBox/tycho2t3_80_mx.jpg',
               positiveY: 'https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Assets/Textures/SkyBox/tycho2t3_80_py.jpg',
@@ -128,16 +130,10 @@ export default function GlobeViewer() {
           requestRenderMode: false,
         })
 
-        // Add Bing Maps satellite layer
-        console.log('Adding base imagery layer...')
+        // Add base imagery
         Cesium.IonImageryProvider.fromAssetId(2).then((provider: any) => {
-          console.log('Provider created, adding to viewer...')
           viewer.imageryLayers.addImageryProvider(provider)
-          console.log('Base imagery layer added successfully')
-        }).catch((err: any) => {
-          console.error('Failed to load Cesium Ion imagery:', err)
-          console.log('Falling back to TileMapService...')
-          // Fallback: use Cesium default Natural Earth layer
+        }).catch(() => {
           viewer.imageryLayers.addImageryProvider(
             Cesium.createTileMapServiceImageryProvider({
               url: Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII'),
@@ -145,18 +141,15 @@ export default function GlobeViewer() {
           )
         })
 
-        // Try to add night lights layer (NASA Black Marble)
+        // Night lights
         Cesium.IonImageryProvider.fromAssetId(3812).then((nightProvider: any) => {
           const nightLayer = viewer.imageryLayers.addImageryProvider(nightProvider)
           nightLayer.dayAlpha = 0.0
           nightLayer.nightAlpha = 1.0
           nightLayer.brightness = 2.0
-          console.log('Night layer loaded successfully')
-        }).catch((err: any) => {
-          console.warn('Night layer not available (requires Cesium Ion subscription):', err.message)
-        })
+        }).catch(() => {})
 
-        // Add cloud layer (NASA GIBS MODIS)
+        // Cloud layer
         try {
           const cloudLayer = viewer.imageryLayers.addImageryProvider(
             new Cesium.WebMapTileServiceImageryProvider({
@@ -167,63 +160,43 @@ export default function GlobeViewer() {
               tileMatrixSetID: '250m',
               maximumLevel: 8,
               credit: 'NASA GIBS',
-              // Use recent date
               times: new Cesium.TimeIntervalCollection([
                 new Cesium.TimeInterval({
                   start: Cesium.JulianDate.fromIso8601('2024-01-01'),
                   stop: Cesium.JulianDate.fromIso8601('2025-12-31'),
-                  data: '2024-06-20', // Fixed date
+                  data: '2024-06-20',
                 }),
               ]),
             })
           )
-          // Cloud layer semi-transparent overlay
           cloudLayer.alpha = 0.4
           cloudLayer.brightness = 1.2
-          console.log('Cloud layer loaded')
-        } catch (err) {
-          console.warn('Cloud layer not available:', err)
-        }
+        } catch {}
 
         viewerRef.current = viewer
 
-        // Configure globe - cinematic effects
-        viewer.scene.globe.enableLighting = false // Disable day/night terminator
+        // Globe settings
+        viewer.scene.globe.enableLighting = false
         viewer.scene.globe.tileCacheSize = 5000
         viewer.scene.globe.maximumScreenSpaceError = 1.5
         viewer.scene.globe.preloadAncestors = true
-
-        // ====== Atmosphere effects - moderate blue edge glow ======
         viewer.scene.skyAtmosphere.hueShift = 0
         viewer.scene.skyAtmosphere.saturationShift = 0.1
         viewer.scene.skyAtmosphere.brightnessShift = 0.05
-
-        // Earth atmosphere glow - keep default, slightly enhanced
         viewer.scene.globe.showGroundAtmosphere = true
-
-        // Set time - UK at dusk position (day/night boundary)
-        // UTC 18:00 is approximately dusk time in UK
         viewer.clock.currentTime = Cesium.JulianDate.fromIso8601('2024-06-21T18:00:00Z')
-        viewer.clock.shouldAnimate = false // Stop time flow
+        viewer.clock.shouldAnimate = false
         viewer.scene.globe.preloadSiblings = true
 
         // Add markers and borders
         addMarkers(Cesium, viewer)
         loadCountryBorders(Cesium, viewer)
 
-        // Set initial position - London starting point top-down view
-        const start = ANIMATION_CONFIG.startPosition
-        setCameraPosition(
-          viewer,
-          Cesium,
-          start.lon,
-          start.lat,
-          start.alt,
-          start.heading,
-          start.pitch
-        )
+        // Set initial position
+        const animator = new FlightAnimator(getDefaultAnimation().config as FlightConfig)
+        const start = animator.getStartPosition()
+        setCameraPosition(viewer, Cesium, start.lon, start.lat, start.alt, start.heading, start.pitch)
 
-        // Update altitude on tick
         viewer.clock.onTick.addEventListener(() => {
           const alt = viewer.camera.positionCartographic.height
           setAltitude(formatAltitude(alt))
@@ -238,21 +211,24 @@ export default function GlobeViewer() {
     }
 
     init()
-
-    // Strict Mode cleanup - don't destroy viewer
-    // Will be cleaned up automatically when navigating away
   }, [])
 
-  // Set camera position
-  function setCameraPosition(
-    viewer: any,
-    Cesium: any,
-    lon: number,
-    lat: number,
-    alt: number,
-    heading: number,
-    pitch: number
-  ) {
+  // Update camera when animation changes
+  useEffect(() => {
+    if (!viewerRef.current || !window.Cesium || !isReady) return
+
+    const animator = getAnimator()
+    const start = animator.getStartPosition()
+    setCameraPosition(viewerRef.current, window.Cesium, start.lon, start.lat, start.alt, start.heading, start.pitch)
+
+    // Clear any existing flight lines
+    if (flightLineEntityRef.current) {
+      viewerRef.current.entities.remove(flightLineEntityRef.current)
+      flightLineEntityRef.current = null
+    }
+  }, [currentAnimation, isReady, getAnimator])
+
+  function setCameraPosition(viewer: any, Cesium: any, lon: number, lat: number, alt: number, heading: number, pitch: number) {
     viewer.camera.setView({
       destination: Cesium.Cartesian3.fromDegrees(lon, lat, alt),
       orientation: {
@@ -263,14 +239,12 @@ export default function GlobeViewer() {
     })
   }
 
-  // Format altitude
   function formatAltitude(alt: number): string {
     if (alt > 1000000) return (alt / 1000000).toFixed(1) + 'M km'
     if (alt > 1000) return (alt / 1000).toFixed(1) + ' km'
     return alt.toFixed(0) + ' m'
   }
 
-  // Add markers
   function addMarkers(Cesium: any, viewer: any) {
     // UK Label
     viewer.entities.add({
@@ -302,42 +276,25 @@ export default function GlobeViewer() {
       },
     })
 
-    // London marker - fixed size, no zoom scaling
-    viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(LOCATIONS.london.lon, LOCATIONS.london.lat, 50),
-      point: {
-        pixelSize: 14,
-        color: Cesium.Color.fromCssColorString('#fbbf24'),
-        outlineColor: Cesium.Color.fromCssColorString('#f59e0b'),
-        outlineWidth: 2,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-      label: {
-        text: 'RIBA Royal Institute of British Architects\n66 Portland Place, London',
-        font: '13px sans-serif',
-        fillColor: Cesium.Color.WHITE,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 2,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        pixelOffset: new Cesium.Cartesian2(0, -24),
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-    })
+    // Location markers
+    addLocationMarker(Cesium, viewer, LOCATIONS.london, '#fbbf24', 'RIBA 英国皇家建筑师学会\n66 Portland Place, London')
+    addLocationMarker(Cesium, viewer, LOCATIONS.shenzhen, '#fbbf24', '深圳国际会展中心\nShenzhen World Exhibition & Convention Center')
+  }
 
-    // Shenzhen marker - fixed size, no zoom scaling
+  function addLocationMarker(Cesium: any, viewer: any, loc: Location, color: string, label: string) {
     viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(LOCATIONS.shenzhen.lon, LOCATIONS.shenzhen.lat, 50),
+      position: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, 50),
       point: {
         pixelSize: 14,
-        color: Cesium.Color.fromCssColorString('#fbbf24'),
+        color: Cesium.Color.fromCssColorString(color),
         outlineColor: Cesium.Color.fromCssColorString('#f59e0b'),
         outlineWidth: 2,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
       label: {
-        text: '深圳国际会展中心\nShenzhen World Exhibition & Convention Center',
+        text: label,
         font: '13px sans-serif',
-        fillColor: Cesium.Color.fromCssColorString('#fbbf24'),
+        fillColor: Cesium.Color.fromCssColorString(color),
         outlineColor: Cesium.Color.BLACK,
         outlineWidth: 2,
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
@@ -347,7 +304,6 @@ export default function GlobeViewer() {
     })
   }
 
-  // Load country borders
   async function loadCountryBorders(Cesium: any, viewer: any) {
     try {
       const res = await fetch(
@@ -378,129 +334,43 @@ export default function GlobeViewer() {
     }
   }
 
-  // Catmull-Rom spline interpolation - smooth through all control points
-  function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): number {
-    const t2 = t * t
-    const t3 = t2 * t
-    return 0.5 * (
-      (2 * p1) +
-      (-p0 + p2) * t +
-      (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
-      (-p0 + 3 * p1 - 3 * p2 + p3) * t3
-    )
-  }
-
-  // Catmull-Rom interpolation for CameraPosition
-  function catmullRomPosition(
-    p0: CameraPosition,
-    p1: CameraPosition,
-    p2: CameraPosition,
-    p3: CameraPosition,
-    t: number
-  ): CameraPosition {
-    return {
-      lon: catmullRom(p0.lon, p1.lon, p2.lon, p3.lon, t),
-      lat: catmullRom(p0.lat, p1.lat, p2.lat, p3.lat, t),
-      alt: catmullRom(p0.alt, p1.alt, p2.alt, p3.alt, t),
-      heading: catmullRom(p0.heading, p1.heading, p2.heading, p3.heading, t),
-      pitch: catmullRom(p0.pitch, p1.pitch, p2.pitch, p3.pitch, t),
-    }
-  }
-
-  // Smoothstep easing
-  function smoothstep(t: number): number {
-    return t * t * (3 - 2 * t)
-  }
-
-  // Linear interpolation
-  function lerpPosition(p1: CameraPosition, p2: CameraPosition, t: number): CameraPosition {
-    return {
-      lon: p1.lon + (p2.lon - p1.lon) * t,
-      lat: p1.lat + (p2.lat - p1.lat) * t,
-      alt: p1.alt + (p2.alt - p1.alt) * t,
-      heading: p1.heading + (p2.heading - p1.heading) * t,
-      pitch: p1.pitch + (p2.pitch - p1.pitch) * t,
-    }
-  }
-
-  // Get frame position - takeoff/landing linear, middle curved
-  function getFramePosition(frameNum: number): CameraPosition & { segment: string } {
-    const segments = ANIMATION_CONFIG.segments
-    const totalDur = segments.reduce((sum, s) => sum + s.duration, 0)
-    const time = frameNum / ANIMATION_CONFIG.fps
-
-    // Global progress 0-1
-    const globalT = Math.min(time / totalDur, 1)
-
-    // Collect all keyframes
-    const keyframes: CameraPosition[] = [
-      ANIMATION_CONFIG.startPosition,
-      ...segments.map(s => s.to)
-    ]
-
-    // Return exact start and end positions
-    if (globalT <= 0.001) {
-      return { ...keyframes[0], segment: segments[0]?.name || 'start' }
-    }
-    if (globalT >= 0.999) {
-      return { ...keyframes[keyframes.length - 1], segment: 'end' }
+  // Update flight line entity
+  function updateFlightLine(Cesium: any, viewer: any, lineStates: ReturnType<GlobeLineAnimator['getLineStates']>) {
+    // Remove existing line
+    if (flightLineEntityRef.current) {
+      viewer.entities.remove(flightLineEntityRef.current)
+      flightLineEntityRef.current = null
     }
 
-    // Apply easing at start and end
-    let easedT: number
-    if (globalT < 0.08) {
-      easedT = smoothstep(globalT / 0.08) * 0.08
-    } else if (globalT > 0.92) {
-      easedT = 0.92 + smoothstep((globalT - 0.92) / 0.08) * 0.08
-    } else {
-      easedT = globalT
-    }
+    if (lineStates.length === 0) return
 
-    // Calculate cumulative time ratio for each keyframe
-    const durations = segments.map(s => s.duration)
-    const cumulativeT: number[] = [0]
-    let cumSum = 0
-    for (const d of durations) {
-      cumSum += d / totalDur
-      cumulativeT.push(cumSum)
-    }
+    for (const state of lineStates) {
+      if (state.progress <= 0) continue
 
-    // Find current segment
-    let segmentIndex = 0
-    for (let i = 0; i < cumulativeT.length - 1; i++) {
-      if (easedT >= cumulativeT[i] && easedT <= cumulativeT[i + 1]) {
-        segmentIndex = i
-        break
-      }
-    }
+      const points = GlobeLineAnimator.generateArcPoints(
+        state.from,
+        state.to,
+        state.progress,
+        state.arcHeight,
+        100
+      )
 
-    // Calculate local t within segment
-    const segStart = cumulativeT[segmentIndex]
-    const segEnd = cumulativeT[segmentIndex + 1]
-    const localT = segEnd > segStart ? (easedT - segStart) / (segEnd - segStart) : 0
+      if (points.length < 2) continue
 
-    const p1 = keyframes[segmentIndex]
-    const p2 = keyframes[segmentIndex + 1]
+      const positions = points.map(p =>
+        Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt + 50000) // Lift above ground
+      )
 
-    // First segment (takeoff) and last two segments (landing) use linear interpolation - vertical motion doesn't need curves
-    const isFirstSegment = segmentIndex === 0
-    const isLastTwoSegments = segmentIndex >= segments.length - 2
-
-    if (isFirstSegment || isLastTwoSegments) {
-      // Straight vertical takeoff/landing
-      const pos = lerpPosition(p1, p2, localT)
-      return { ...pos, segment: segments[segmentIndex]?.name || 'end' }
-    }
-
-    // Middle segments (flying over Earth) use Catmull-Rom spline curves
-    const p0 = keyframes[Math.max(0, segmentIndex - 1)]
-    const p3 = keyframes[Math.min(keyframes.length - 1, segmentIndex + 2)]
-
-    const pos = catmullRomPosition(p0, p1, p2, p3, localT)
-
-    return {
-      ...pos,
-      segment: segments[segmentIndex]?.name || 'end',
+      flightLineEntityRef.current = viewer.entities.add({
+        polyline: {
+          positions,
+          width: 3,
+          material: new Cesium.PolylineGlowMaterialProperty({
+            glowPower: 0.3,
+            color: Cesium.Color.fromCssColorString(state.color),
+          }),
+        },
+      })
     }
   }
 
@@ -510,6 +380,11 @@ export default function GlobeViewer() {
 
     const viewer = viewerRef.current
     const Cesium = window.Cesium
+    const animator = getAnimator()
+    const totalFrames = animator.getTotalFrames()
+    const fps = currentAnimation.type === 'flight'
+      ? (currentAnimation.config as FlightConfig).fps
+      : (currentAnimation.config as GlobeLineConfig).fps
 
     isPausedRef.current = false
     setIsPaused(false)
@@ -517,10 +392,8 @@ export default function GlobeViewer() {
     if (record) {
       setIsRecording(true)
       recordedChunksRef.current = []
-
       setStatus('Setting up 1920x1080...')
 
-      // Set fixed recording size
       const container = containerRef.current!
       container.style.width = '1920px'
       container.style.height = '1080px'
@@ -529,15 +402,14 @@ export default function GlobeViewer() {
 
       setStatus('Recording...')
 
-      // Setup MediaRecorder
       const canvas = viewer.scene.canvas
-      const stream = canvas.captureStream(ANIMATION_CONFIG.fps)
+      const stream = canvas.captureStream(fps)
       mediaRecorderRef.current = new MediaRecorder(stream, {
         mimeType: 'video/webm;codecs=vp9',
         videoBitsPerSecond: 50000000,
       })
 
-      mediaRecorderRef.current.ondataavailable = (e) => {
+      mediaRecorderRef.current.ondataavailable = (e: BlobEvent) => {
         if (e.data.size > 0) {
           recordedChunksRef.current.push(e.data)
         }
@@ -550,7 +422,7 @@ export default function GlobeViewer() {
     }
 
     // Set initial position
-    const startPos = getFramePosition(0)
+    const startPos = animator.getStartPosition()
     setCameraPosition(viewer, Cesium, startPos.lon, startPos.lat, startPos.alt, startPos.heading, startPos.pitch)
     viewer.scene.render()
 
@@ -558,37 +430,34 @@ export default function GlobeViewer() {
     for (let frame = 0; frame < totalFrames; frame++) {
       setCurrentFrame(frame)
 
-      // Wait while paused
       while (isPausedRef.current) {
         await new Promise(r => setTimeout(r, 100))
       }
 
-      const pos = getFramePosition(frame)
-      setCameraPosition(viewer, Cesium, pos.lon, pos.lat, pos.alt, pos.heading, pos.pitch)
+      if (currentAnimation.type === 'flight') {
+        const flightAnimator = animator as FlightAnimator
+        const pos = flightAnimator.getFramePosition(frame)
+        setCameraPosition(viewer, Cesium, pos.lon, pos.lat, pos.alt, pos.heading, pos.pitch)
 
-      // Cloud effect: show cloud layer at 1000m - 15000m altitude
-      // Cloud is densest at 3000m - 6000m
-      const alt = pos.alt
-      let opacity = 0
-      if (alt >= 1000 && alt <= 15000) {
-        if (alt < 3000) {
-          // 1000-3000m: fade in
-          opacity = (alt - 1000) / 2000
-        } else if (alt <= 6000) {
-          // 3000-6000m: densest
-          opacity = 1
-        } else {
-          // 6000-15000m: fade out
-          opacity = 1 - (alt - 6000) / 9000
-        }
+        // Cloud effect
+        const opacity = flightAnimator.getCloudOpacity(pos.alt)
+        setCloudOpacity(opacity)
+      } else {
+        const globeAnimator = animator as GlobeLineAnimator
+        const pos = globeAnimator.getFramePosition(frame)
+        setCameraPosition(viewer, Cesium, pos.lon, pos.lat, pos.alt, pos.heading, pos.pitch)
+
+        // Update flight lines
+        const lineStates = globeAnimator.getLineStates(frame)
+        updateFlightLine(Cesium, viewer, lineStates)
+
+        setCloudOpacity(0)
       }
-      setCloudOpacity(opacity)
 
       setProgress((frame / totalFrames) * 100)
-
       viewer.scene.render()
 
-      await new Promise(r => setTimeout(r, 1000 / ANIMATION_CONFIG.fps))
+      await new Promise(r => setTimeout(r, 1000 / fps))
     }
 
     if (record) {
@@ -601,7 +470,6 @@ export default function GlobeViewer() {
         }
       })
 
-      // Restore size
       const container = containerRef.current!
       container.style.width = '100%'
       container.style.height = '100%'
@@ -614,11 +482,10 @@ export default function GlobeViewer() {
       setStatus('Preview complete')
     }
 
-    setCloudOpacity(0) // Reset cloud layer
+    setCloudOpacity(0)
     setProgress(100)
-  }, [totalFrames])
+  }, [currentAnimation, getAnimator])
 
-  // Download video
   const downloadVideo = useCallback(async () => {
     if (recordedChunksRef.current.length === 0) return
 
@@ -628,14 +495,13 @@ export default function GlobeViewer() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'earth-journey-london-to-shenzhen.webm'
+    a.download = `${currentAnimation.id}.webm`
     a.click()
     URL.revokeObjectURL(url)
 
     setStatus('Video downloaded!')
-  }, [])
+  }, [currentAnimation.id])
 
-  // Toggle pause
   const togglePause = useCallback(() => {
     isPausedRef.current = !isPausedRef.current
     setIsPaused(isPausedRef.current)
@@ -649,60 +515,65 @@ export default function GlobeViewer() {
     }
   }, [currentFrame, isRecording])
 
+  const handleAnimationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const anim = animations.find(a => a.id === e.target.value)
+    if (anim) {
+      setCurrentAnimation(anim)
+      setProgress(0)
+      setCurrentFrame(0)
+    }
+  }
+
   const isAnimating = isPreview || isRecording
+  const animator = getAnimator()
+  const totalFrames = animator.getTotalFrames()
 
   return (
     <div className={styles.container}>
-      {/* Deep space nebula background layer */}
       <div className={styles.nebulaBackground} />
-
       <div ref={containerRef} className={styles.cesiumContainer} />
-
-      {/* Cloud traversal effect */}
-      <div
-        className={styles.cloudLayer}
-        style={{ opacity: cloudOpacity }}
-      />
-
-      {/* Earth atmospheric glow enhancement layer */}
+      <div className={styles.cloudLayer} style={{ opacity: cloudOpacity }} />
       <div className={styles.earthGlow} />
 
       <div className={styles.panel}>
         <h3>ANIMATION RECORDER</h3>
+
+        {/* Animation selector */}
+        <div className={styles.selector}>
+          <select
+            value={currentAnimation.id}
+            onChange={handleAnimationChange}
+            disabled={isAnimating}
+          >
+            {animations.map(a => (
+              <option key={a.id} value={a.id}>
+                {a.nameZh || a.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className={styles.info}>
-          London → Earth → China → Shenzhen<br />
+          {currentAnimation.description}<br />
           Output: 1920x1080 @ 60fps
         </div>
         <div className={`${styles.status} ${isRecording ? styles.recording : ''}`}>
           {status}
         </div>
 
-        <button
-          onClick={() => runAnimation(false)}
-          disabled={!isReady || isAnimating}
-        >
+        <button onClick={() => runAnimation(false)} disabled={!isReady || isAnimating}>
           PREVIEW
         </button>
 
-        <button
-          onClick={togglePause}
-          disabled={!isAnimating}
-        >
+        <button onClick={togglePause} disabled={!isAnimating}>
           {isPaused ? 'RESUME' : 'PAUSE'}
         </button>
 
-        <button
-          onClick={() => runAnimation(true)}
-          disabled={!isReady || isAnimating}
-          className={styles.primary}
-        >
+        <button onClick={() => runAnimation(true)} disabled={!isReady || isAnimating} className={styles.primary}>
           START RECORDING
         </button>
 
-        <button
-          onClick={downloadVideo}
-          disabled={recordedChunksRef.current.length === 0 || isRecording}
-        >
+        <button onClick={downloadVideo} disabled={recordedChunksRef.current.length === 0 || isRecording}>
           DOWNLOAD VIDEO
         </button>
 
