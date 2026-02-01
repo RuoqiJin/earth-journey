@@ -2,7 +2,7 @@
 
 Cinematic 3D Earth flight animation from London to Shenzhen with video recording capability.
 
-https://github.com/user-attachments/assets/demo.mp4
+![Earth Journey Screenshot](docs/screenshot.jpg)
 
 ## Features
 
@@ -30,7 +30,7 @@ The animation flies from **RIBA (Royal Institute of British Architects), 66 Port
 
 ```bash
 # Clone the repository
-git clone https://github.com/nicekate/earth-journey.git
+git clone https://github.com/RuoqiJin/earth-journey.git
 cd earth-journey
 
 # Install dependencies
