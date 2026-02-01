@@ -44,6 +44,8 @@ export default function GlobeViewer() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
   const isPausedRef = useRef(false)
+  const progressBarRef = useRef<HTMLDivElement>(null)
+  const isDraggingRef = useRef(false)
 
   // Create animator based on type
   const getAnimator = useCallback(() => {
@@ -524,6 +526,70 @@ export default function GlobeViewer() {
     }
   }
 
+  // Seek to specific frame (for timeline scrubbing)
+  const seekToFrame = useCallback((frame: number) => {
+    if (!viewerRef.current || !window.Cesium) return
+
+    const viewer = viewerRef.current
+    const Cesium = window.Cesium
+    const animator = getAnimator()
+    const totalFrames = animator.getTotalFrames()
+
+    const clampedFrame = Math.max(0, Math.min(frame, totalFrames - 1))
+    setCurrentFrame(clampedFrame)
+    setProgress((clampedFrame / totalFrames) * 100)
+
+    if (currentAnimation.type === 'flight') {
+      const flightAnimator = animator as FlightAnimator
+      const pos = flightAnimator.getFramePosition(clampedFrame)
+      setCameraPosition(viewer, Cesium, pos.lon, pos.lat, pos.alt, pos.heading, pos.pitch)
+      setCloudOpacity(flightAnimator.getCloudOpacity(pos.alt))
+    } else {
+      const globeAnimator = animator as GlobeLineAnimator
+      const pos = globeAnimator.getFramePosition(clampedFrame)
+      setCameraPosition(viewer, Cesium, pos.lon, pos.lat, pos.alt, pos.heading, pos.pitch)
+      const lineStates = globeAnimator.getLineStates(clampedFrame)
+      updateFlightLine(Cesium, viewer, lineStates)
+      setCloudOpacity(0)
+    }
+
+    viewer.scene.render()
+    setStatus(`Frame ${clampedFrame + 1} / ${totalFrames}`)
+  }, [currentAnimation, getAnimator])
+
+  // Handle progress bar click/drag
+  const handleProgressBarInteraction = useCallback((e: React.MouseEvent<HTMLDivElement> | MouseEvent) => {
+    if (!progressBarRef.current || isRecording) return
+
+    const rect = progressBarRef.current.getBoundingClientRect()
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width))
+    const percentage = x / rect.width
+    const animator = getAnimator()
+    const frame = Math.floor(percentage * animator.getTotalFrames())
+    seekToFrame(frame)
+  }, [isRecording, getAnimator, seekToFrame])
+
+  const handleProgressBarMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (isRecording) return
+    isDraggingRef.current = true
+    handleProgressBarInteraction(e)
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDraggingRef.current) {
+        handleProgressBarInteraction(e)
+      }
+    }
+
+    const handleMouseUp = () => {
+      isDraggingRef.current = false
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [isRecording, handleProgressBarInteraction])
+
   const isAnimating = isPreview || isRecording
   const animator = getAnimator()
   const totalFrames = animator.getTotalFrames()
@@ -577,8 +643,13 @@ export default function GlobeViewer() {
           DOWNLOAD VIDEO
         </button>
 
-        <div className={styles.progress}>
+        <div
+          ref={progressBarRef}
+          className={`${styles.progress} ${!isRecording ? styles.interactive : ''}`}
+          onMouseDown={handleProgressBarMouseDown}
+        >
           <div className={styles.progressBar} style={{ width: `${progress}%` }} />
+          <div className={styles.progressHandle} style={{ left: `${progress}%` }} />
         </div>
       </div>
 

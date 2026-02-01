@@ -116,17 +116,46 @@
 }
 
 .progress {
-  height: 4px;
+  height: 8px;
   background: rgba(248, 250, 252, 0.1);
-  border-radius: 2px;
-  overflow: hidden;
+  border-radius: 4px;
   margin-top: 10px;
+  position: relative;
+}
+
+.progress.interactive {
+  cursor: pointer;
+}
+
+.progress.interactive:hover {
+  background: rgba(248, 250, 252, 0.15);
 }
 
 .progressBar {
   height: 100%;
   background: #fbbf24;
-  transition: width 0.1s ease;
+  border-radius: 4px;
+  transition: width 0.05s ease;
+  pointer-events: none;
+}
+
+.progressHandle {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  background: #fbbf24;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.progress.interactive:hover .progressHandle,
+.progress.interactive:active .progressHandle {
+  opacity: 1;
 }
 
 .altitude {
