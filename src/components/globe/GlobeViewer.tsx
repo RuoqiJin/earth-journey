@@ -371,10 +371,11 @@ export default function GlobeViewer() {
           positions: new Cesium.CallbackProperty(() => {
             return flightLinePositionsRef.current
           }, false),
-          width: 4,
-          material: new Cesium.PolylineGlowMaterialProperty({
-            glowPower: 0.25,
-            color: Cesium.Color.fromCssColorString(state.color),
+          width: 10,
+          material: new Cesium.PolylineDashMaterialProperty({
+            color: Cesium.Color.fromCssColorString('#dc2626'), // RIBA red
+            gapColor: Cesium.Color.WHITE,
+            dashLength: 24,
           }),
         },
       })
