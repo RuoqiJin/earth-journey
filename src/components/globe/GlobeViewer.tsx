@@ -336,18 +336,23 @@ export default function GlobeViewer() {
     }
   }
 
-  // Update flight line entity
+  // Update flight line entity - use CallbackProperty for smooth updates
   function updateFlightLine(Cesium: any, viewer: any, lineStates: ReturnType<GlobeLineAnimator['getLineStates']>) {
-    // Remove existing line
-    if (flightLineEntityRef.current) {
-      viewer.entities.remove(flightLineEntityRef.current)
-      flightLineEntityRef.current = null
+    if (lineStates.length === 0) {
+      // Hide existing line if no states
+      if (flightLineEntityRef.current) {
+        flightLineEntityRef.current.show = false
+      }
+      return
     }
 
-    if (lineStates.length === 0) return
-
     for (const state of lineStates) {
-      if (state.progress <= 0) continue
+      if (state.progress <= 0) {
+        if (flightLineEntityRef.current) {
+          flightLineEntityRef.current.show = false
+        }
+        continue
+      }
 
       const points = GlobeLineAnimator.generateArcPoints(
         state.from,
@@ -360,19 +365,25 @@ export default function GlobeViewer() {
       if (points.length < 2) continue
 
       const positions = points.map(p =>
-        Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt + 50000) // Lift above ground
+        Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt + 50000)
       )
 
-      flightLineEntityRef.current = viewer.entities.add({
-        polyline: {
-          positions,
-          width: 3,
-          material: new Cesium.PolylineGlowMaterialProperty({
-            glowPower: 0.3,
-            color: Cesium.Color.fromCssColorString(state.color),
-          }),
-        },
-      })
+      // If entity exists, update positions; otherwise create new
+      if (flightLineEntityRef.current) {
+        flightLineEntityRef.current.polyline.positions = positions
+        flightLineEntityRef.current.show = true
+      } else {
+        flightLineEntityRef.current = viewer.entities.add({
+          polyline: {
+            positions,
+            width: 4,
+            material: new Cesium.PolylineGlowMaterialProperty({
+              glowPower: 0.25,
+              color: Cesium.Color.fromCssColorString(state.color),
+            }),
+          },
+        })
+      }
     }
   }
 
