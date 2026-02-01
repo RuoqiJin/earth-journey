@@ -2,9 +2,7 @@
 
 Cinematic 3D Earth flight animation from London to Shenzhen with video recording capability.
 
-[![Demo Video](docs/screenshot.jpg)](https://github.com/RuoqiJin/earth-journey/releases/download/v1.0.0/demo.mp4)
-
-> Click the image above to watch the demo video
+![Demo](docs/demo.gif)
 
 ## Features
 
