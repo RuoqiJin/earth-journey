@@ -27,6 +27,7 @@ export default function GlobeViewer() {
   const viewerRef = useRef<any>(null)
   const initedRef = useRef(false)
   const flightLineEntityRef = useRef<any>(null)
+  const flightLinePositionsRef = useRef<any[]>([])
 
   // Animation state
   const [currentAnimation, setCurrentAnimation] = useState<AnimationProject>(getDefaultAnimation())
@@ -336,54 +337,47 @@ export default function GlobeViewer() {
     }
   }
 
-  // Update flight line entity - use CallbackProperty for smooth updates
+  // Update flight line entity - use CallbackProperty for dynamic updates
   function updateFlightLine(Cesium: any, viewer: any, lineStates: ReturnType<GlobeLineAnimator['getLineStates']>) {
-    if (lineStates.length === 0) {
-      // Hide existing line if no states
-      if (flightLineEntityRef.current) {
-        flightLineEntityRef.current.show = false
-      }
+    if (lineStates.length === 0 || !lineStates[0] || lineStates[0].progress <= 0) {
+      // Clear positions to hide line
+      flightLinePositionsRef.current = []
       return
     }
 
-    for (const state of lineStates) {
-      if (state.progress <= 0) {
-        if (flightLineEntityRef.current) {
-          flightLineEntityRef.current.show = false
-        }
-        continue
-      }
+    const state = lineStates[0]
+    const points = GlobeLineAnimator.generateArcPoints(
+      state.from,
+      state.to,
+      state.progress,
+      state.arcHeight,
+      100
+    )
 
-      const points = GlobeLineAnimator.generateArcPoints(
-        state.from,
-        state.to,
-        state.progress,
-        state.arcHeight,
-        100
-      )
+    if (points.length < 2) {
+      flightLinePositionsRef.current = []
+      return
+    }
 
-      if (points.length < 2) continue
+    // Update positions ref (will be read by CallbackProperty)
+    flightLinePositionsRef.current = points.map(p =>
+      Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt + 50000)
+    )
 
-      const positions = points.map(p =>
-        Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt + 50000)
-      )
-
-      // If entity exists, update positions; otherwise create new
-      if (flightLineEntityRef.current) {
-        flightLineEntityRef.current.polyline.positions = positions
-        flightLineEntityRef.current.show = true
-      } else {
-        flightLineEntityRef.current = viewer.entities.add({
-          polyline: {
-            positions,
-            width: 4,
-            material: new Cesium.PolylineGlowMaterialProperty({
-              glowPower: 0.25,
-              color: Cesium.Color.fromCssColorString(state.color),
-            }),
-          },
-        })
-      }
+    // Create entity with CallbackProperty if not exists
+    if (!flightLineEntityRef.current) {
+      flightLineEntityRef.current = viewer.entities.add({
+        polyline: {
+          positions: new Cesium.CallbackProperty(() => {
+            return flightLinePositionsRef.current
+          }, false),
+          width: 4,
+          material: new Cesium.PolylineGlowMaterialProperty({
+            glowPower: 0.25,
+            color: Cesium.Color.fromCssColorString(state.color),
+          }),
+        },
+      })
     }
   }
 
