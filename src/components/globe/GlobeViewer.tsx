@@ -27,10 +27,20 @@ export default function GlobeViewer() {
   const viewerRef = useRef<any>(null)
   const initedRef = useRef(false)
   const flightLineEntityRef = useRef<any>(null)
+  const flightLineGlowEntityRef = useRef<any>(null)
   const flightLinePositionsRef = useRef<any[]>([])
 
-  // Animation state
-  const [currentAnimation, setCurrentAnimation] = useState<AnimationProject>(getDefaultAnimation())
+  // Animation state - restore from localStorage
+  const [currentAnimation, setCurrentAnimation] = useState<AnimationProject>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('earth-journey-animation')
+      if (saved) {
+        const found = animations.find(a => a.id === saved)
+        if (found) return found
+      }
+    }
+    return getDefaultAnimation()
+  })
   const [status, setStatus] = useState('Loading Cesium...')
   const [isReady, setIsReady] = useState(false)
   const [isPreview, setIsPreview] = useState(false)
@@ -225,6 +235,10 @@ export default function GlobeViewer() {
     setCameraPosition(viewerRef.current, window.Cesium, start.lon, start.lat, start.alt, start.heading, start.pitch)
 
     // Clear any existing flight lines
+    if (flightLineGlowEntityRef.current) {
+      viewerRef.current.entities.remove(flightLineGlowEntityRef.current)
+      flightLineGlowEntityRef.current = null
+    }
     if (flightLineEntityRef.current) {
       viewerRef.current.entities.remove(flightLineEntityRef.current)
       flightLineEntityRef.current = null
@@ -360,23 +374,37 @@ export default function GlobeViewer() {
     }
 
     // Update positions ref (will be read by CallbackProperty)
+    // Add higher altitude offset to keep line above Earth surface
     flightLinePositionsRef.current = points.map(p =>
-      Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt + 50000)
+      Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt + 100000)
     )
 
-    // Create entity with CallbackProperty if not exists
+    // Create entities with CallbackProperty if not exists
+    // Layer 1: White glow (underneath, wider, semi-transparent)
+    if (!flightLineGlowEntityRef.current) {
+      flightLineGlowEntityRef.current = viewer.entities.add({
+        polyline: {
+          positions: new Cesium.CallbackProperty(() => {
+            return flightLinePositionsRef.current
+          }, false),
+          width: 24,
+          material: new Cesium.PolylineGlowMaterialProperty({
+            glowPower: 0.4,
+            taperPower: 0.2,
+            color: Cesium.Color.WHITE.withAlpha(0.6),
+          }),
+        },
+      })
+    }
+    // Layer 2: Red core (on top, thinner)
     if (!flightLineEntityRef.current) {
       flightLineEntityRef.current = viewer.entities.add({
         polyline: {
           positions: new Cesium.CallbackProperty(() => {
             return flightLinePositionsRef.current
           }, false),
-          width: 10,
-          material: new Cesium.PolylineDashMaterialProperty({
-            color: Cesium.Color.fromCssColorString('#dc2626'), // RIBA red
-            gapColor: Cesium.Color.WHITE,
-            dashLength: 24,
-          }),
+          width: 3,
+          material: Cesium.Color.fromCssColorString('#dc2626'),
         },
       })
     }
@@ -529,6 +557,7 @@ export default function GlobeViewer() {
       setCurrentAnimation(anim)
       setProgress(0)
       setCurrentFrame(0)
+      localStorage.setItem('earth-journey-animation', anim.id)
     }
   }
 

@@ -46,6 +46,9 @@ export interface GlobeLineConfig {
     lat: number
     alt: number
     rotationSpeed: number  // degrees per second
+    followLine?: boolean   // Camera follows the line
+    followAlt?: number     // Altitude when following
+    followPitch?: number   // Pitch angle when following (-90 = looking down)
   }
   totalDuration: number
   lines: FlightLine[]

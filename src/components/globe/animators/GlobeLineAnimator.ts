@@ -27,6 +27,16 @@ export class GlobeLineAnimator {
   }
 
   getStartPosition(): CameraPosition {
+    if (this.config.camera.followLine && this.config.lines.length > 0) {
+      const line = this.config.lines[0]
+      return {
+        lon: line.from.lon,
+        lat: line.from.lat,
+        alt: this.config.camera.followAlt || 5000000,
+        heading: 0,
+        pitch: this.config.camera.followPitch || -60,
+      }
+    }
     return {
       lon: this.config.camera.lon,
       lat: this.config.camera.lat,
@@ -40,11 +50,43 @@ export class GlobeLineAnimator {
     return this.config.markers
   }
 
-  // Get camera position at frame (with slow rotation)
+  // Get camera position at frame (follow line or slow rotation)
   getFramePosition(frameNum: number): CameraPosition {
     const time = frameNum / this.config.fps
-    const rotationOffset = time * this.config.camera.rotationSpeed
 
+    // Camera follow mode
+    if (this.config.camera.followLine && this.config.lines.length > 0) {
+      const line = this.config.lines[0]
+      const delay = line.delay || 0
+      const lineStartTime = delay
+      const lineEndTime = delay + line.duration
+
+      let progress: number
+      if (time < lineStartTime) {
+        progress = 0
+      } else if (time >= lineEndTime) {
+        progress = 1
+      } else {
+        progress = (time - lineStartTime) / line.duration
+        // Use same easing as line for sync
+        progress = this.easeOutCubic(progress)
+      }
+
+      // Interpolate camera position along the line
+      const lon = line.from.lon + (line.to.lon - line.from.lon) * progress
+      const lat = line.from.lat + (line.to.lat - line.from.lat) * progress
+
+      return {
+        lon,
+        lat,
+        alt: this.config.camera.followAlt || 5000000,
+        heading: 0,
+        pitch: this.config.camera.followPitch || -60,
+      }
+    }
+
+    // Default rotation mode
+    const rotationOffset = time * this.config.camera.rotationSpeed
     return {
       lon: this.config.camera.lon + rotationOffset,
       lat: this.config.camera.lat,
@@ -53,6 +95,7 @@ export class GlobeLineAnimator {
       pitch: -90,
     }
   }
+
 
   // Get all line states at current frame
   getLineStates(frameNum: number): LineState[] {
