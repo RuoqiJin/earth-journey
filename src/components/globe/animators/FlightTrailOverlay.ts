@@ -26,7 +26,7 @@ export const DEFAULT_TRAIL_CONFIG: TrailConfig = {
   lineWidth: 3,
   glowColor: '#fbbf24',
   glowWidth: 8,
-  airplaneScale: 0.5,
+  airplaneScale: 1.2,
   airplaneImage: '/airplane.svg',
 }
 

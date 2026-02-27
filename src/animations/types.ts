@@ -89,4 +89,22 @@ export const LOCATIONS: Record<string, Location> = {
     name: 'China',
     nameZh: '中国',
   },
+  hongkong: {
+    lat: 22.3193,
+    lon: 114.1694,
+    name: 'Hong Kong',
+    nameZh: '香港',
+  },
+  beijing: {
+    lat: 39.9042,
+    lon: 116.4074,
+    name: 'Beijing',
+    nameZh: '北京',
+  },
+  shanghai: {
+    lat: 31.2304,
+    lon: 121.4737,
+    name: 'Shanghai',
+    nameZh: '上海',
+  },
 }

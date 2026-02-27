@@ -58,7 +58,7 @@ function getTrailMapping(frame: number, config: FlightConfig): { progress: numbe
 export default function GlobeViewer() {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<any>(null)
-  const trailOverlayRef = useRef<FlightTrailOverlay | null>(null)
+  const trailOverlaysRef = useRef<FlightTrailOverlay[]>([])
   const flightLineEntityRef = useRef<any>(null)
 	  const flightLineGlowEntityRef = useRef<any>(null)
 	  const flightLinePositionsRef = useRef<any[]>([])
@@ -331,10 +331,8 @@ export default function GlobeViewer() {
     // Cleanup function for React Strict Mode
     return () => {
       isCancelled = true
-      if (trailOverlayRef.current) {
-        trailOverlayRef.current.destroy()
-        trailOverlayRef.current = null
-      }
+      trailOverlaysRef.current.forEach(o => o.destroy())
+      trailOverlaysRef.current = []
       if (viewerRef.current) {
         viewerRef.current.destroy()
         viewerRef.current = null
@@ -353,11 +351,9 @@ export default function GlobeViewer() {
     const start = animator.getStartPosition()
     setCameraPosition(viewerRef.current, window.Cesium, start.lon, start.lat, start.alt, start.heading, start.pitch)
 
-    // Clear any existing trail overlay
-    if (trailOverlayRef.current) {
-      trailOverlayRef.current.destroy()
-      trailOverlayRef.current = null
-    }
+    // Clear any existing trail overlays
+    trailOverlaysRef.current.forEach(o => o.destroy())
+    trailOverlaysRef.current = []
 
     // Clear any existing flight lines
     if (flightLineGlowEntityRef.current) {
@@ -742,16 +738,25 @@ export default function GlobeViewer() {
     setCameraPosition(viewer, Cesium, startPos.lon, startPos.lat, startPos.alt, startPos.heading, startPos.pitch)
     viewer.scene.render()
 
-    // Create flight trail overlay for flight animations
+    // Create flight trail overlays for flight animations
     if (currentAnimation.type === 'flight') {
-      if (trailOverlayRef.current) trailOverlayRef.current.destroy()
-      trailOverlayRef.current = new FlightTrailOverlay(viewer, Cesium, {
-        from: LOCATIONS.london,
-        to: LOCATIONS.shenzhen,
-        arcHeight: 1.0,
-        numPoints: 200,
+      trailOverlaysRef.current.forEach(o => o.destroy())
+      const routes = [
+        { from: LOCATIONS.london, to: LOCATIONS.shenzhen },
+        { from: LOCATIONS.hongkong, to: LOCATIONS.shenzhen },
+        { from: LOCATIONS.beijing, to: LOCATIONS.shenzhen },
+        { from: LOCATIONS.shanghai, to: LOCATIONS.shenzhen },
+      ]
+      trailOverlaysRef.current = routes.map(r => {
+        const overlay = new FlightTrailOverlay(viewer, Cesium, {
+          from: r.from,
+          to: r.to,
+          arcHeight: 1.0,
+          numPoints: 200,
+        })
+        overlay.setProgress(0)
+        return overlay
       })
-      trailOverlayRef.current.setProgress(0)
     }
 
     // Animation loop
@@ -768,11 +773,11 @@ export default function GlobeViewer() {
         const pos = flightAnimator.getFramePosition(frame)
         setCameraPosition(viewer, Cesium, pos.lon, pos.lat, pos.alt, pos.heading, pos.pitch)
 
-        // Update flight trail — progress mapped to horizontal segments only
-        if (trailOverlayRef.current) {
-          const { progress: trailProgress, airplaneVisible } = getTrailMapping(frame, currentAnimation.config as FlightConfig)
-          trailOverlayRef.current.setProgress(trailProgress)
-          trailOverlayRef.current.setAirplaneVisible(airplaneVisible)
+        // Update flight trails — progress mapped to horizontal segments only
+        const { progress: trailProgress, airplaneVisible } = getTrailMapping(frame, currentAnimation.config as FlightConfig)
+        for (const overlay of trailOverlaysRef.current) {
+          overlay.setProgress(trailProgress)
+          overlay.setAirplaneVisible(airplaneVisible)
         }
 
         // Cloud effect
@@ -896,11 +901,11 @@ export default function GlobeViewer() {
       const pos = flightAnimator.getFramePosition(clampedFrame)
       setCameraPosition(viewer, Cesium, pos.lon, pos.lat, pos.alt, pos.heading, pos.pitch)
       setCloudOpacity(flightAnimator.getCloudOpacity(pos.alt))
-      // Update flight trail — progress mapped to horizontal segments only
-      if (trailOverlayRef.current) {
-        const { progress: trailProgress, airplaneVisible } = getTrailMapping(clampedFrame, currentAnimation.config as FlightConfig)
-        trailOverlayRef.current.setProgress(trailProgress)
-        trailOverlayRef.current.setAirplaneVisible(airplaneVisible)
+      // Update flight trails — progress mapped to horizontal segments only
+      const { progress: trailProgress, airplaneVisible } = getTrailMapping(clampedFrame, currentAnimation.config as FlightConfig)
+      for (const overlay of trailOverlaysRef.current) {
+        overlay.setProgress(trailProgress)
+        overlay.setAirplaneVisible(airplaneVisible)
       }
     } else {
       const globeAnimator = animator as GlobeLineAnimator
