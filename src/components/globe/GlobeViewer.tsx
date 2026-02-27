@@ -61,12 +61,14 @@ export default function GlobeViewer() {
   const [isPaused, setIsPaused] = useState(false)
   const [progress, setProgress] = useState(0)
   const [currentFrame, setCurrentFrame] = useState(0)
+  const currentFrameRef = useRef(0)
   const [altitude, setAltitude] = useState('--')
   const [cloudOpacity, setCloudOpacity] = useState(0)
 
   // Recording state
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
+  const pngFramesRef = useRef<string[]>([])  // For PNG sequence export
   const isPausedRef = useRef(false)
   const progressBarRef = useRef<HTMLDivElement>(null)
   const isDraggingRef = useRef(false)
@@ -146,6 +148,13 @@ export default function GlobeViewer() {
           terrainProvider: Cesium.createWorldTerrain(),
           scene3DOnly: true,
           requestRenderMode: false,
+          // Enable alpha channel for transparent background
+          contextOptions: {
+            webgl: {
+              alpha: true,
+              premultipliedAlpha: false,
+            },
+          },
         }
 
         // Theme-based skybox
@@ -174,8 +183,12 @@ export default function GlobeViewer() {
           return
         }
 
-        // Set background color for light theme
-        if (!theme.showSkyBox) {
+        // Set background color
+        if (theme.transparentBackground) {
+          // Transparent background for video compositing
+          viewer.scene.backgroundColor = Cesium.Color.TRANSPARENT
+          viewer.scene.globe.baseColor = Cesium.Color.WHITE
+        } else if (!theme.showSkyBox) {
           viewer.scene.backgroundColor = Cesium.Color.fromCssColorString(theme.background)
         }
 
@@ -362,29 +375,62 @@ export default function GlobeViewer() {
       },
     })
 
-    // Location markers
-    addLocationMarker(Cesium, viewer, LOCATIONS.london, theme, 'RIBA 英国皇家建筑师学会\n66 Portland Place, London')
-    addLocationMarker(Cesium, viewer, LOCATIONS.shenzhen, theme, '深圳国际会展中心\nShenzhen World Exhibition & Convention Center')
+    // Location markers with pulse animation
+    addLocationMarker(Cesium, viewer, LOCATIONS.london, theme, '英国伦敦\nLondon, UK')
+    addLocationMarker(Cesium, viewer, LOCATIONS.shenzhen, theme, '中国深圳\nShenzhen, China')
   }
 
   function addLocationMarker(Cesium: any, viewer: any, loc: Location, theme: ThemeConfig, label: string) {
+    const startTime = Date.now()
+    const baseColor = Cesium.Color.fromCssColorString(theme.marker.color)
+
+    // Main marker with pulse animation
     viewer.entities.add({
       position: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, 50),
       point: {
-        pixelSize: 14,
-        color: Cesium.Color.fromCssColorString(theme.marker.color),
+        pixelSize: new Cesium.CallbackProperty(() => {
+          const t = (Date.now() - startTime) / 1000
+          const pulse = Math.sin(t * 2) * 0.15 + 1 // Oscillate between 0.85 and 1.15
+          return 12 * pulse
+        }, false),
+        color: new Cesium.CallbackProperty(() => {
+          const t = (Date.now() - startTime) / 1000
+          const pulse = Math.sin(t * 2) * 0.2 + 0.8 // Oscillate alpha between 0.6 and 1.0
+          return baseColor.withAlpha(pulse)
+        }, false),
         outlineColor: Cesium.Color.fromCssColorString(theme.marker.outlineColor),
         outlineWidth: 2,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
       label: {
         text: label,
-        font: '13px sans-serif',
-        fillColor: Cesium.Color.fromCssColorString(theme.label.color),
-        outlineColor: Cesium.Color.fromCssColorString(theme.label.outlineColor),
-        outlineWidth: theme.label.outlineWidth,
-        style: theme.label.outlineWidth > 0 ? Cesium.LabelStyle.FILL_AND_OUTLINE : Cesium.LabelStyle.FILL,
-        pixelOffset: new Cesium.Cartesian2(0, -24),
+        font: 'bold 22px sans-serif',
+        fillColor: Cesium.Color.WHITE,
+        outlineColor: Cesium.Color.BLACK,
+        outlineWidth: 3,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        pixelOffset: new Cesium.Cartesian2(0, -32),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        scaleByDistance: new Cesium.NearFarScalar(500, 1.2, 5000000, 0.6),
+      },
+    })
+
+    // Outer pulse ring (expanding circle effect)
+    viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, 50),
+      point: {
+        pixelSize: new Cesium.CallbackProperty(() => {
+          const t = (Date.now() - startTime) / 1000
+          const cycle = (t % 2) / 2 // 0 to 1 over 2 seconds
+          return 12 + cycle * 20 // Expand from 12 to 32
+        }, false),
+        color: new Cesium.CallbackProperty(() => {
+          const t = (Date.now() - startTime) / 1000
+          const cycle = (t % 2) / 2 // 0 to 1 over 2 seconds
+          const alpha = 0.6 * (1 - cycle) // Fade out as it expands
+          return baseColor.withAlpha(alpha)
+        }, false),
+        outlineWidth: 0,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
     })
@@ -471,13 +517,18 @@ export default function GlobeViewer() {
     }
 
     // Update positions ref (will be read by CallbackProperty)
-    // Add higher altitude offset to keep line above Earth surface
+    // Add higher altitude offset to keep line well above Earth surface
+    // Base offset of 500km ensures visibility even at line endpoints
     flightLinePositionsRef.current = points.map(p =>
-      Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt + 100000)
+      Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt + 500000)
     )
 
     // Create entities with CallbackProperty if not exists
-    // Layer 1: Glow (underneath, wider) - only if theme shows glow
+    // Use simple color materials instead of PolylineGlowMaterialProperty to avoid rendering issues
+    const glowColor = Cesium.Color.fromCssColorString(theme.line.glowColor).withAlpha(theme.line.glowAlpha)
+    const coreColor = Cesium.Color.fromCssColorString(theme.line.coreColor)
+
+    // Layer 1: Outer glow (wider, semi-transparent) - only if theme shows glow
     if (theme.line.showGlow && !flightLineGlowEntityRef.current) {
       flightLineGlowEntityRef.current = viewer.entities.add({
         polyline: {
@@ -485,15 +536,12 @@ export default function GlobeViewer() {
             return flightLinePositionsRef.current
           }, false),
           width: theme.line.glowWidth,
-          material: new Cesium.PolylineGlowMaterialProperty({
-            glowPower: 0.4,
-            taperPower: 0.2,
-            color: Cesium.Color.fromCssColorString(theme.line.glowColor).withAlpha(theme.line.glowAlpha),
-          }),
+          material: glowColor,
+          depthFailMaterial: glowColor,
         },
       })
     }
-    // Layer 2: Core line (on top, thinner)
+    // Layer 2: Core line (on top, thinner, solid)
     if (!flightLineEntityRef.current) {
       flightLineEntityRef.current = viewer.entities.add({
         polyline: {
@@ -501,20 +549,65 @@ export default function GlobeViewer() {
             return flightLinePositionsRef.current
           }, false),
           width: theme.line.coreWidth,
-          material: Cesium.Color.fromCssColorString(theme.line.coreColor),
+          material: coreColor,
+          depthFailMaterial: coreColor,
         },
       })
     }
   }
 
-  // Convert WebM to MP4 and download
+  // Convert to video and download
   const convertAndDownload = useCallback(async () => {
+    // For transparent theme, send PNG frames to server
+    if (currentTheme.transparentBackground) {
+      if (pngFramesRef.current.length === 0) return
+
+      setStatus(`Uploading ${pngFramesRef.current.length} frames...`)
+
+      try {
+        const response = await fetch('/api/convert-video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            frames: pngFramesRef.current,
+            filename: `${currentAnimation.id}-transparent`,
+            format: 'prores',
+            fps: currentAnimation.type === 'flight'
+              ? (currentAnimation.config as FlightConfig).fps
+              : (currentAnimation.config as GlobeLineConfig).fps,
+          }),
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Conversion failed')
+        }
+
+        setStatus('Converting to ProRes 4444...')
+        const movBlob = await response.blob()
+        const url = URL.createObjectURL(movBlob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${currentAnimation.id}-transparent.mov`
+        a.click()
+        URL.revokeObjectURL(url)
+
+        pngFramesRef.current = []
+        setStatus('ProRes 4444 downloaded! (with alpha channel)')
+      } catch (error) {
+        console.error('Conversion error:', error)
+        setStatus(`Error: ${error instanceof Error ? error.message : 'Conversion failed'}`)
+      }
+      return
+    }
+
+    // For other themes, convert WebM to MP4
     if (recordedChunksRef.current.length === 0) return
 
+    const webmBlob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
     setStatus('Converting to MP4...')
 
     try {
-      const webmBlob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
       const formData = new FormData()
       formData.append('video', webmBlob, `${currentAnimation.id}.webm`)
       formData.append('filename', currentAnimation.id)
@@ -543,7 +636,7 @@ export default function GlobeViewer() {
       console.error('Conversion error:', error)
       setStatus(`Error: ${error instanceof Error ? error.message : 'Conversion failed'}`)
     }
-  }, [currentAnimation.id])
+  }, [currentAnimation, currentTheme.transparentBackground])
 
   // Run animation
   const runAnimation = useCallback(async (record: boolean) => {
@@ -566,6 +659,7 @@ export default function GlobeViewer() {
     if (record) {
       setIsRecording(true)
       recordedChunksRef.current = []
+      pngFramesRef.current = []
       setStatus('Setting up 1920x1080...')
 
       const container = containerRef.current!
@@ -574,22 +668,27 @@ export default function GlobeViewer() {
       viewer.resize()
       await new Promise(r => setTimeout(r, 500))
 
-      setStatus('Recording...')
+      // For transparent theme, use PNG sequence (browser MediaRecorder doesn't support alpha)
+      if (currentTheme.transparentBackground) {
+        setStatus('Recording PNG sequence...')
+        // PNG frames will be captured in the animation loop
+      } else {
+        setStatus('Recording...')
+        const canvas = viewer.scene.canvas
+        const stream = canvas.captureStream(fps)
+        mediaRecorderRef.current = new MediaRecorder(stream, {
+          mimeType: 'video/webm;codecs=vp9',
+          videoBitsPerSecond: 50000000,
+        })
 
-      const canvas = viewer.scene.canvas
-      const stream = canvas.captureStream(fps)
-      mediaRecorderRef.current = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp9',
-        videoBitsPerSecond: 50000000,
-      })
-
-      mediaRecorderRef.current.ondataavailable = (e: BlobEvent) => {
-        if (e.data.size > 0) {
-          recordedChunksRef.current.push(e.data)
+        mediaRecorderRef.current.ondataavailable = (e: BlobEvent) => {
+          if (e.data.size > 0) {
+            recordedChunksRef.current.push(e.data)
+          }
         }
-      }
 
-      mediaRecorderRef.current.start()
+        mediaRecorderRef.current.start()
+      }
     } else {
       setIsPreview(true)
       setStatus('Previewing...')
@@ -620,6 +719,7 @@ export default function GlobeViewer() {
 
     // Animation loop
     for (let frame = 0; frame < totalFrames; frame++) {
+      currentFrameRef.current = frame
       setCurrentFrame(frame)
 
       while (isPausedRef.current) {
@@ -649,6 +749,15 @@ export default function GlobeViewer() {
       setProgress((frame / totalFrames) * 100)
       viewer.scene.render()
 
+      // Capture PNG frame for transparent theme
+      if (record && currentTheme.transparentBackground) {
+        const canvas = viewer.scene.canvas
+        pngFramesRef.current.push(canvas.toDataURL('image/png'))
+        if (frame % 30 === 0) {
+          setStatus(`Capturing frames: ${frame + 1}/${totalFrames}`)
+        }
+      }
+
       await new Promise(r => setTimeout(r, 1000 / fps))
     }
 
@@ -667,18 +776,32 @@ export default function GlobeViewer() {
         endPos.pitch
       )
       viewer.scene.render()
+
+      // Capture PNG frame for transparent theme (post-animation)
+      if (record && currentTheme.transparentBackground) {
+        const canvas = viewer.scene.canvas
+        pngFramesRef.current.push(canvas.toDataURL('image/png'))
+      }
+
       await new Promise(r => setTimeout(r, 1000 / fps))
     }
 
     if (record) {
-      mediaRecorderRef.current?.stop()
-      await new Promise<void>(r => {
-        if (mediaRecorderRef.current) {
-          mediaRecorderRef.current.onstop = () => r()
-        } else {
-          r()
-        }
-      })
+      // For transparent theme, PNG frames were captured - now process them
+      if (currentTheme.transparentBackground) {
+        setStatus(`Processing ${pngFramesRef.current.length} frames...`)
+        // PNG frames will be converted in convertAndDownload
+      } else {
+        // For normal themes, stop MediaRecorder
+        mediaRecorderRef.current?.stop()
+        await new Promise<void>(r => {
+          if (mediaRecorderRef.current) {
+            mediaRecorderRef.current.onstop = () => r()
+          } else {
+            r()
+          }
+        })
+      }
 
       const container = containerRef.current!
       container.style.width = '100%'
@@ -745,6 +868,7 @@ export default function GlobeViewer() {
     const totalFrames = animator.getTotalFrames()
 
     const clampedFrame = Math.max(0, Math.min(frame, totalFrames - 1))
+    currentFrameRef.current = clampedFrame
     setCurrentFrame(clampedFrame)
     setProgress((clampedFrame / totalFrames) * 100)
 
@@ -799,12 +923,91 @@ export default function GlobeViewer() {
     document.addEventListener('mouseup', handleMouseUp)
   }, [isRecording, handleProgressBarInteraction])
 
+  // Keyboard frame stepping with repeat support
+  const keyRepeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const activeKeyRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isRecording) return
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+      e.preventDefault()
+
+      // Ignore key repeat events from OS — we manage our own repeat
+      if (e.key === activeKeyRef.current) return
+      activeKeyRef.current = e.key
+
+      const total = getAnimator().getTotalFrames()
+      const step = e.shiftKey ? 10 : 1
+      const action = e.key === 'ArrowLeft'
+        ? () => seekToFrame(Math.max(0, currentFrameRef.current - step))
+        : () => seekToFrame(Math.min(total - 1, currentFrameRef.current + step))
+
+      action()
+      keyRepeatRef.current = setInterval(action, 1000 / 30)
+    }
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === activeKeyRef.current) {
+        activeKeyRef.current = null
+        if (keyRepeatRef.current) { clearInterval(keyRepeatRef.current); keyRepeatRef.current = null }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+      if (keyRepeatRef.current) clearInterval(keyRepeatRef.current)
+    }
+  }, [isRecording, getAnimator, seekToFrame])
+
+  // Get segment boundaries for progress bar markers
+  const getSegmentMarkers = useCallback(() => {
+    if (currentAnimation.type !== 'flight') return []
+    const config = currentAnimation.config as FlightConfig
+    const totalDuration = config.segments.reduce((sum, s) => sum + s.duration, 0)
+    let cumulative = 0
+    return config.segments.map(s => {
+      const start = cumulative / totalDuration * 100
+      cumulative += s.duration
+      return { name: s.name, position: start }
+    })
+  }, [currentAnimation])
+
+  // Long-press repeat for frame step buttons
+  const repeatTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const repeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const startRepeat = useCallback((action: () => void) => {
+    action()
+    repeatTimerRef.current = setTimeout(() => {
+      repeatIntervalRef.current = setInterval(action, 1000 / 30) // 30fps repeat
+    }, 300) // 300ms delay before repeat starts
+  }, [])
+
+  const stopRepeat = useCallback(() => {
+    if (repeatTimerRef.current) { clearTimeout(repeatTimerRef.current); repeatTimerRef.current = null }
+    if (repeatIntervalRef.current) { clearInterval(repeatIntervalRef.current); repeatIntervalRef.current = null }
+  }, [])
+
+  useEffect(() => stopRepeat, [stopRepeat])
+
   const isAnimating = isPreview || isRecording
   const animator = getAnimator()
   const totalFrames = animator.getTotalFrames()
+  const segmentMarkers = getSegmentMarkers()
 
   return (
-    <div className={styles.container} style={{ background: currentTheme.background }}>
+    <div
+      className={styles.container}
+      style={{
+        background: currentTheme.transparentBackground
+          ? 'repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 50% / 20px 20px'  // Checkerboard for preview
+          : currentTheme.background,
+      }}
+    >
       {currentTheme.showNebula && <div className={styles.nebulaBackground} />}
       {currentTheme.showGlobeGlow && (
         <div
@@ -880,6 +1083,45 @@ export default function GlobeViewer() {
         >
           <div className={styles.progressBar} style={{ width: `${progress}%` }} />
           <div className={styles.progressHandle} style={{ left: `${progress}%` }} />
+          {segmentMarkers.map((m, i) => (
+            <div
+              key={i}
+              className={styles.segmentMarker}
+              style={{ left: `${m.position}%` }}
+              title={m.name}
+            />
+          ))}
+        </div>
+        <div className={styles.segmentLabels}>
+          {segmentMarkers.map((m, i) => (
+            <span key={i} className={styles.segmentLabel} style={{ left: `${m.position}%` }}>
+              {m.name}
+            </span>
+          ))}
+        </div>
+
+        <div className={styles.frameControls}>
+          <button
+            disabled={isRecording}
+            onMouseDown={() => startRepeat(() => seekToFrame(Math.max(0, currentFrameRef.current - 10)))}
+            onMouseUp={stopRepeat} onMouseLeave={stopRepeat}
+          >-10</button>
+          <button
+            disabled={isRecording}
+            onMouseDown={() => startRepeat(() => seekToFrame(Math.max(0, currentFrameRef.current - 1)))}
+            onMouseUp={stopRepeat} onMouseLeave={stopRepeat}
+          >&lt;</button>
+          <span className={styles.frameDisplay}>{currentFrame + 1} / {totalFrames}</span>
+          <button
+            disabled={isRecording}
+            onMouseDown={() => startRepeat(() => seekToFrame(Math.min(totalFrames - 1, currentFrameRef.current + 1)))}
+            onMouseUp={stopRepeat} onMouseLeave={stopRepeat}
+          >&gt;</button>
+          <button
+            disabled={isRecording}
+            onMouseDown={() => startRepeat(() => seekToFrame(Math.min(totalFrames - 1, currentFrameRef.current + 10)))}
+            onMouseUp={stopRepeat} onMouseLeave={stopRepeat}
+          >+10</button>
         </div>
       </div>
 
@@ -888,11 +1130,9 @@ export default function GlobeViewer() {
         ALTITUDE
       </div>
 
-      {isAnimating && (
-        <div className={styles.frameCounter}>
-          Frame: {currentFrame + 1} / {totalFrames}
-        </div>
-      )}
+      <div className={styles.frameCounter}>
+        Frame: {currentFrame + 1} / {totalFrames}
+      </div>
 
       {currentTheme.showVignette && <div className={styles.vignette} />}
     </div>

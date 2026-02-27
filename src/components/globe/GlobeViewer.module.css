@@ -280,3 +280,52 @@
   background: #030712;
   color: #f8fafc;
 }
+
+/* Segment markers on progress bar */
+.segmentMarker {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: rgba(248, 250, 252, 0.5);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.segmentLabels {
+  position: relative;
+  height: 16px;
+  margin-top: 2px;
+}
+
+.segmentLabel {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 0.55rem;
+  color: rgba(248, 250, 252, 0.4);
+  white-space: nowrap;
+}
+
+/* Frame step controls */
+.frameControls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.frameControls button {
+  width: auto;
+  min-width: 36px;
+  padding: 6px 8px;
+  margin-bottom: 0;
+  font-size: 0.7rem;
+}
+
+.frameDisplay {
+  font-size: 0.7rem;
+  color: rgba(248, 250, 252, 0.6);
+  min-width: 100px;
+  text-align: center;
+}

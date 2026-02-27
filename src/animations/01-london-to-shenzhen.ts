@@ -13,7 +13,7 @@ const config: FlightConfig = {
     // Take off from London, continuous ascent
     {
       name: 'pullout-london',
-      duration: 4,
+      duration: 8,
       to: { lon: LOCATIONS.london.lon, lat: LOCATIONS.london.lat, alt: 2000000, heading: 0, pitch: -90 },
     },
     // Fly across Eurasia
@@ -22,22 +22,16 @@ const config: FlightConfig = {
       duration: 6,
       to: { lon: 60, lat: 40, alt: 12000000, heading: 0, pitch: -90 },
     },
-    // Approach China
+    // Center on Shenzhen from high altitude
     {
-      name: 'approach-china',
+      name: 'center-shenzhen',
       duration: 4,
-      to: { lon: LOCATIONS.china.lon, lat: LOCATIONS.china.lat, alt: 6000000, heading: 0, pitch: -90 },
+      to: { lon: LOCATIONS.shenzhen.lon, lat: LOCATIONS.shenzhen.lat, alt: 6000000, heading: 0, pitch: -90 },
     },
-    // Dive toward Shenzhen
+    // Continuous descent to Shenzhen World Exhibition Center
     {
-      name: 'approach-shenzhen',
-      duration: 4,
-      to: { lon: LOCATIONS.shenzhen.lon, lat: LOCATIONS.shenzhen.lat, alt: 300000, heading: 0, pitch: -90 },
-    },
-    // Land at Shenzhen World Exhibition Center
-    {
-      name: 'dive-shenzhen',
-      duration: 4,
+      name: 'descent-shenzhen',
+      duration: 14,
       to: { lon: LOCATIONS.shenzhen.lon, lat: LOCATIONS.shenzhen.lat, alt: 500, heading: 0, pitch: -90 },
     },
   ],
