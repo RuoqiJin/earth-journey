@@ -699,24 +699,6 @@ export default function GlobeViewer() {
     setCameraPosition(viewer, Cesium, startPos.lon, startPos.lat, startPos.alt, startPos.heading, startPos.pitch)
     viewer.scene.render()
 
-    // Pre-animation: slow rotation before main animation (1 second)
-    const preFrames = fps
-    const preRotationSpeed = 3 // degrees per second
-    for (let i = 0; i < preFrames; i++) {
-      // Start from offset and ease into start position
-      const rotationOffset = ((preFrames - i) / fps) * preRotationSpeed
-      setCameraPosition(
-        viewer, Cesium,
-        startPos.lon - rotationOffset,
-        startPos.lat,
-        startPos.alt,
-        startPos.heading,
-        startPos.pitch
-      )
-      viewer.scene.render()
-      await new Promise(r => setTimeout(r, 1000 / fps))
-    }
-
     // Animation loop
     for (let frame = 0; frame < totalFrames; frame++) {
       currentFrameRef.current = frame
@@ -756,31 +738,6 @@ export default function GlobeViewer() {
         if (frame % 30 === 0) {
           setStatus(`Capturing frames: ${frame + 1}/${totalFrames}`)
         }
-      }
-
-      await new Promise(r => setTimeout(r, 1000 / fps))
-    }
-
-    // Post-animation: continue slow rotation (1 second)
-    const endPos = animator.getFramePosition(totalFrames - 1)
-    const postFrames = fps
-    const postRotationSpeed = 3 // degrees per second
-    for (let i = 0; i < postFrames; i++) {
-      const rotationOffset = (i / fps) * postRotationSpeed
-      setCameraPosition(
-        viewer, Cesium,
-        endPos.lon + rotationOffset,
-        endPos.lat,
-        endPos.alt,
-        endPos.heading,
-        endPos.pitch
-      )
-      viewer.scene.render()
-
-      // Capture PNG frame for transparent theme (post-animation)
-      if (record && currentTheme.transparentBackground) {
-        const canvas = viewer.scene.canvas
-        pngFramesRef.current.push(canvas.toDataURL('image/png'))
       }
 
       await new Promise(r => setTimeout(r, 1000 / fps))
