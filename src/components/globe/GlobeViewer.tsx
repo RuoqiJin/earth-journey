@@ -10,7 +10,7 @@ import {
   type Location,
   LOCATIONS,
 } from '@/animations'
-import { FlightAnimator, GlobeLineAnimator } from './animators'
+import { FlightAnimator, GlobeLineAnimator, FlightTrailOverlay } from './animators'
 import { themes, getThemeById, getDefaultTheme, type ThemeConfig } from '@/themes'
 import styles from './GlobeViewer.module.css'
 
@@ -26,6 +26,7 @@ const CESIUM_TOKEN = process.env.NEXT_PUBLIC_CESIUM_TOKEN || ''
 export default function GlobeViewer() {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<any>(null)
+  const trailOverlayRef = useRef<FlightTrailOverlay | null>(null)
   const flightLineEntityRef = useRef<any>(null)
 	  const flightLineGlowEntityRef = useRef<any>(null)
 	  const flightLinePositionsRef = useRef<any[]>([])
@@ -298,6 +299,10 @@ export default function GlobeViewer() {
     // Cleanup function for React Strict Mode
     return () => {
       isCancelled = true
+      if (trailOverlayRef.current) {
+        trailOverlayRef.current.destroy()
+        trailOverlayRef.current = null
+      }
       if (viewerRef.current) {
         viewerRef.current.destroy()
         viewerRef.current = null
@@ -315,6 +320,12 @@ export default function GlobeViewer() {
     const animator = getAnimator()
     const start = animator.getStartPosition()
     setCameraPosition(viewerRef.current, window.Cesium, start.lon, start.lat, start.alt, start.heading, start.pitch)
+
+    // Clear any existing trail overlay
+    if (trailOverlayRef.current) {
+      trailOverlayRef.current.destroy()
+      trailOverlayRef.current = null
+    }
 
     // Clear any existing flight lines
     if (flightLineGlowEntityRef.current) {
@@ -699,6 +710,18 @@ export default function GlobeViewer() {
     setCameraPosition(viewer, Cesium, startPos.lon, startPos.lat, startPos.alt, startPos.heading, startPos.pitch)
     viewer.scene.render()
 
+    // Create flight trail overlay for flight animations
+    if (currentAnimation.type === 'flight') {
+      if (trailOverlayRef.current) trailOverlayRef.current.destroy()
+      trailOverlayRef.current = new FlightTrailOverlay(viewer, Cesium, {
+        from: LOCATIONS.london,
+        to: LOCATIONS.shenzhen,
+        arcHeight: 1.0,
+        numPoints: 200,
+      })
+      trailOverlayRef.current.setProgress(0)
+    }
+
     // Animation loop
     for (let frame = 0; frame < totalFrames; frame++) {
       currentFrameRef.current = frame
@@ -712,6 +735,11 @@ export default function GlobeViewer() {
         const flightAnimator = animator as FlightAnimator
         const pos = flightAnimator.getFramePosition(frame)
         setCameraPosition(viewer, Cesium, pos.lon, pos.lat, pos.alt, pos.heading, pos.pitch)
+
+        // Update flight trail
+        if (trailOverlayRef.current) {
+          trailOverlayRef.current.setProgress(frame / totalFrames)
+        }
 
         // Cloud effect
         const opacity = flightAnimator.getCloudOpacity(pos.alt)
@@ -834,6 +862,10 @@ export default function GlobeViewer() {
       const pos = flightAnimator.getFramePosition(clampedFrame)
       setCameraPosition(viewer, Cesium, pos.lon, pos.lat, pos.alt, pos.heading, pos.pitch)
       setCloudOpacity(flightAnimator.getCloudOpacity(pos.alt))
+      // Update flight trail
+      if (trailOverlayRef.current) {
+        trailOverlayRef.current.setProgress(clampedFrame / totalFrames)
+      }
     } else {
       const globeAnimator = animator as GlobeLineAnimator
       const pos = globeAnimator.getFramePosition(clampedFrame)
