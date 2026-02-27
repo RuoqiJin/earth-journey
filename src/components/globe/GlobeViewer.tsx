@@ -417,6 +417,9 @@ export default function GlobeViewer() {
     // Location markers with pulse animation
     addLocationMarker(Cesium, viewer, LOCATIONS.london, theme, '英国伦敦\nLondon, UK')
     addLocationMarker(Cesium, viewer, LOCATIONS.shenzhen, theme, '中国深圳\nShenzhen, China')
+    addLocationMarker(Cesium, viewer, LOCATIONS.hongkong, theme, '香港\nHong Kong')
+    addLocationMarker(Cesium, viewer, LOCATIONS.beijing, theme, '北京\nBeijing')
+    addLocationMarker(Cesium, viewer, LOCATIONS.shanghai, theme, '上海\nShanghai')
   }
 
   function addLocationMarker(Cesium: any, viewer: any, loc: Location, theme: ThemeConfig, label: string) {
