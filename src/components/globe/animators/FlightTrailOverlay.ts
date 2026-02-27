@@ -180,6 +180,11 @@ export class FlightTrailOverlay {
     this.trailPositions = positions
   }
 
+  // Show/hide airplane billboard
+  setAirplaneVisible(visible: boolean) {
+    if (this.airplaneEntity) this.airplaneEntity.show = visible
+  }
+
   // Clean up all entities
   destroy() {
     if (this.glowEntity) {

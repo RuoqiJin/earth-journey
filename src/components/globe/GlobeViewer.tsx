@@ -23,6 +23,38 @@ declare global {
 
 const CESIUM_TOKEN = process.env.NEXT_PUBLIC_CESIUM_TOKEN || ''
 
+// Map camera animation frame to trail progress
+// Trail only advances during horizontal-movement segments (lon/lat changing)
+function getTrailMapping(frame: number, config: FlightConfig): { progress: number, airplaneVisible: boolean } {
+  const fps = config.fps
+  let prevLon = config.startPosition.lon
+  let prevLat = config.startPosition.lat
+  let cumFrames = 0
+  let trailStartFrame = -1
+  let trailEndFrame = -1
+
+  for (const seg of config.segments) {
+    const startFrame = cumFrames
+    cumFrames += seg.duration * fps
+    const isHorizontal = seg.to.lon !== prevLon || seg.to.lat !== prevLat
+    if (isHorizontal) {
+      if (trailStartFrame === -1) trailStartFrame = startFrame
+      trailEndFrame = cumFrames
+    }
+    prevLon = seg.to.lon
+    prevLat = seg.to.lat
+  }
+
+  if (frame < trailStartFrame) {
+    return { progress: 0, airplaneVisible: false }
+  }
+  if (frame < trailEndFrame) {
+    const t = (frame - trailStartFrame) / (trailEndFrame - trailStartFrame)
+    return { progress: t, airplaneVisible: true }
+  }
+  return { progress: 1.0, airplaneVisible: false }
+}
+
 export default function GlobeViewer() {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<any>(null)
@@ -736,9 +768,11 @@ export default function GlobeViewer() {
         const pos = flightAnimator.getFramePosition(frame)
         setCameraPosition(viewer, Cesium, pos.lon, pos.lat, pos.alt, pos.heading, pos.pitch)
 
-        // Update flight trail
+        // Update flight trail — progress mapped to horizontal segments only
         if (trailOverlayRef.current) {
-          trailOverlayRef.current.setProgress(frame / totalFrames)
+          const { progress: trailProgress, airplaneVisible } = getTrailMapping(frame, currentAnimation.config as FlightConfig)
+          trailOverlayRef.current.setProgress(trailProgress)
+          trailOverlayRef.current.setAirplaneVisible(airplaneVisible)
         }
 
         // Cloud effect
@@ -862,9 +896,11 @@ export default function GlobeViewer() {
       const pos = flightAnimator.getFramePosition(clampedFrame)
       setCameraPosition(viewer, Cesium, pos.lon, pos.lat, pos.alt, pos.heading, pos.pitch)
       setCloudOpacity(flightAnimator.getCloudOpacity(pos.alt))
-      // Update flight trail
+      // Update flight trail — progress mapped to horizontal segments only
       if (trailOverlayRef.current) {
-        trailOverlayRef.current.setProgress(clampedFrame / totalFrames)
+        const { progress: trailProgress, airplaneVisible } = getTrailMapping(clampedFrame, currentAnimation.config as FlightConfig)
+        trailOverlayRef.current.setProgress(trailProgress)
+        trailOverlayRef.current.setAirplaneVisible(airplaneVisible)
       }
     } else {
       const globeAnimator = animator as GlobeLineAnimator
