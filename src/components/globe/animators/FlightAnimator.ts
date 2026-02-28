@@ -1,11 +1,12 @@
 // Flight camera animator - handles the flying camera animation
-// Uses Cubic Hermite Spline for smooth lon/lat path with zero-tangent override
-// on pure vertical segments, and logarithmic interpolation for altitude.
+// Uses Cubic Hermite Spline for smooth path with zero-tangent override
+// on pure vertical segments. Altitude uses Hermite in log-space for C1 continuity.
 import { FlightConfig, CameraPosition } from '@/animations/types'
 
 interface Tangent {
   lon: number
   lat: number
+  logAlt: number
   heading: number
   pitch: number
 }
@@ -57,11 +58,12 @@ export class FlightAnimator {
         t = {
           lon: (next.lon - prev.lon) / dt,
           lat: (next.lat - prev.lat) / dt,
+          logAlt: (Math.log(next.alt) - Math.log(prev.alt)) / dt,
           heading: (next.heading - prev.heading) / dt,
           pitch: (next.pitch - prev.pitch) / dt,
         }
       } else {
-        t = { lon: 0, lat: 0, heading: 0, pitch: 0 }
+        t = { lon: 0, lat: 0, logAlt: 0, heading: 0, pitch: 0 }
       }
 
       // Zero out lon/lat tangent if either adjacent segment is purely vertical
@@ -93,13 +95,6 @@ export class FlightAnimator {
 
   getStartPosition(): CameraPosition {
     return this.config.startPosition
-  }
-
-  // Logarithmic interpolation for altitude — perceptually uniform zoom speed
-  private logLerp(a: number, b: number, t: number): number {
-    const logA = Math.log(a)
-    const logB = Math.log(b)
-    return Math.exp(logA + (logB - logA) * t)
   }
 
   // Cubic Hermite basis functions
@@ -144,13 +139,16 @@ export class FlightAnimator {
     const t = (globalTime - this.segmentTimes[idx]) / T // local t [0, 1]
 
     // Scale tangents from velocity (per-second) to segment-local space
-    const m0 = { lon: v0.lon * T, lat: v0.lat * T, heading: v0.heading * T, pitch: v0.pitch * T }
-    const m1 = { lon: v1.lon * T, lat: v1.lat * T, heading: v1.heading * T, pitch: v1.pitch * T }
+    const m0 = { lon: v0.lon * T, lat: v0.lat * T, logAlt: v0.logAlt * T, heading: v0.heading * T, pitch: v0.pitch * T }
+    const m1 = { lon: v1.lon * T, lat: v1.lat * T, logAlt: v1.logAlt * T, heading: v1.heading * T, pitch: v1.pitch * T }
+
+    // Altitude: Hermite in log-space for C1 continuity at peaks
+    const logAlt = this.hermite(Math.log(p0.alt), Math.log(p1.alt), m0.logAlt, m1.logAlt, t)
 
     return {
       lon: this.hermite(p0.lon, p1.lon, m0.lon, m1.lon, t),
       lat: this.hermite(p0.lat, p1.lat, m0.lat, m1.lat, t),
-      alt: this.logLerp(p0.alt, p1.alt, t),
+      alt: Math.exp(logAlt),
       heading: this.hermite(p0.heading, p1.heading, m0.heading, m1.heading, t),
       pitch: this.hermite(p0.pitch, p1.pitch, m0.pitch, m1.pitch, t),
       segment: segments[idx]?.name || 'end',
