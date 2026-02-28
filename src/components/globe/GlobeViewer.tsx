@@ -98,10 +98,8 @@ export default function GlobeViewer() {
   const [altitude, setAltitude] = useState('--')
   const [cloudOpacity, setCloudOpacity] = useState(0)
 
-  // Recording state
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const recordedChunksRef = useRef<Blob[]>([])
-  const pngFramesRef = useRef<string[]>([])  // For PNG sequence export
+  // Recording state — offline frame-by-frame capture
+  const frameSessionRef = useRef<string | null>(null)
   const isPausedRef = useRef(false)
   const progressBarRef = useRef<HTMLDivElement>(null)
   const isDraggingRef = useRef(false)
@@ -181,11 +179,12 @@ export default function GlobeViewer() {
           terrainProvider: Cesium.createWorldTerrain(),
           scene3DOnly: true,
           requestRenderMode: false,
-          // Enable alpha channel for transparent background
+          // Enable alpha channel for transparent background + preserveDrawingBuffer for reliable frame capture
           contextOptions: {
             webgl: {
               alpha: true,
               premultipliedAlpha: false,
+              preserveDrawingBuffer: true,
             },
           },
         }
@@ -636,85 +635,44 @@ export default function GlobeViewer() {
     }
   }
 
-  // Convert to video and download
-  const convertAndDownload = useCallback(async () => {
-    // For transparent theme, send PNG frames to server
-    if (currentTheme.transparentBackground) {
-      if (pngFramesRef.current.length === 0) return
+  // Finalize recording: FFmpeg assembly on server → download video
+  const finalizeRecording = useCallback(async (sessionId: string, fps: number) => {
+    const isTransparent = currentTheme.transparentBackground
+    const ext = isTransparent ? 'mov' : 'mp4'
+    const label = isTransparent ? 'ProRes 4444' : 'MP4'
 
-      setStatus(`Uploading ${pngFramesRef.current.length} frames...`)
-
-      try {
-        const response = await fetch('/api/convert-video', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            frames: pngFramesRef.current,
-            filename: `${currentAnimation.id}-transparent`,
-            format: 'prores',
-            fps: currentAnimation.type === 'flight'
-              ? (currentAnimation.config as FlightConfig).fps
-              : (currentAnimation.config as GlobeLineConfig).fps,
-          }),
-        })
-
-        if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.error || 'Conversion failed')
-        }
-
-        setStatus('Converting to ProRes 4444...')
-        const movBlob = await response.blob()
-        const url = URL.createObjectURL(movBlob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${currentAnimation.id}-transparent.mov`
-        a.click()
-        URL.revokeObjectURL(url)
-
-        pngFramesRef.current = []
-        setStatus('ProRes 4444 downloaded! (with alpha channel)')
-      } catch (error) {
-        console.error('Conversion error:', error)
-        setStatus(`Error: ${error instanceof Error ? error.message : 'Conversion failed'}`)
-      }
-      return
-    }
-
-    // For other themes, convert WebM to MP4
-    if (recordedChunksRef.current.length === 0) return
-
-    const webmBlob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
-    setStatus('Converting to MP4...')
+    setStatus(`Assembling ${label}...`)
 
     try {
-      const formData = new FormData()
-      formData.append('video', webmBlob, `${currentAnimation.id}.webm`)
-      formData.append('filename', currentAnimation.id)
-
-      const response = await fetch('/api/convert-video', {
+      const response = await fetch('/api/frames', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'finalize',
+          sessionId,
+          fps,
+          transparent: isTransparent,
+          filename: currentAnimation.id,
+        }),
       })
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Conversion failed')
+        throw new Error(error.error || 'Assembly failed')
       }
 
-      const mp4Blob = await response.blob()
-      const url = URL.createObjectURL(mp4Blob)
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${currentAnimation.id}.mp4`
+      a.download = `${currentAnimation.id}.${ext}`
       a.click()
       URL.revokeObjectURL(url)
 
-      recordedChunksRef.current = []
-      setStatus('MP4 downloaded!')
+      setStatus(`${label} downloaded!`)
     } catch (error) {
-      console.error('Conversion error:', error)
-      setStatus(`Error: ${error instanceof Error ? error.message : 'Conversion failed'}`)
+      console.error('Finalize error:', error)
+      setStatus(`Error: ${error instanceof Error ? error.message : 'Assembly failed'}`)
     }
   }, [currentAnimation, currentTheme.transparentBackground])
 
@@ -738,8 +696,6 @@ export default function GlobeViewer() {
 
     if (record) {
       setIsRecording(true)
-      recordedChunksRef.current = []
-      pngFramesRef.current = []
       setStatus('Setting up 1920x1080...')
 
       const container = containerRef.current!
@@ -748,27 +704,15 @@ export default function GlobeViewer() {
       viewer.resize()
       await new Promise(r => setTimeout(r, 500))
 
-      // For transparent theme, use PNG sequence (browser MediaRecorder doesn't support alpha)
-      if (currentTheme.transparentBackground) {
-        setStatus('Recording PNG sequence...')
-        // PNG frames will be captured in the animation loop
-      } else {
-        setStatus('Recording...')
-        const canvas = viewer.scene.canvas
-        const stream = canvas.captureStream(fps)
-        mediaRecorderRef.current = new MediaRecorder(stream, {
-          mimeType: 'video/webm;codecs=vp9',
-          videoBitsPerSecond: 50000000,
-        })
-
-        mediaRecorderRef.current.ondataavailable = (e: BlobEvent) => {
-          if (e.data.size > 0) {
-            recordedChunksRef.current.push(e.data)
-          }
-        }
-
-        mediaRecorderRef.current.start()
-      }
+      // Init frame session on server
+      const initRes = await fetch('/api/frames', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'init' }),
+      })
+      const { sessionId } = await initRes.json()
+      frameSessionRef.current = sessionId
+      setStatus('Recording (offline frame capture)...')
     } else {
       setIsPreview(true)
       setStatus('Previewing...')
@@ -850,46 +794,42 @@ export default function GlobeViewer() {
       setProgress((frame / totalFrames) * 100)
       viewer.scene.render()
 
-      // Capture PNG frame for transparent theme
-      if (record && currentTheme.transparentBackground) {
-        const canvas = viewer.scene.canvas
-        pngFramesRef.current.push(canvas.toDataURL('image/png'))
-        if (frame % 30 === 0) {
-          setStatus(`Capturing frames: ${frame + 1}/${totalFrames}`)
+      // Offline frame capture: toBlob → upload to server (all themes)
+      if (record && frameSessionRef.current) {
+        await new Promise<void>((resolve, reject) => {
+          viewer.scene.canvas.toBlob(async (blob: Blob | null) => {
+            if (!blob) { reject(new Error('toBlob failed')); return }
+            try {
+              const fd = new FormData()
+              fd.append('sessionId', frameSessionRef.current!)
+              fd.append('frameNum', String(frame))
+              fd.append('frame', blob, `frame_${String(frame).padStart(5, '0')}.png`)
+              const res = await fetch('/api/frames', { method: 'POST', body: fd })
+              if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
+              resolve()
+            } catch (e) { reject(e) }
+          }, 'image/png')
+        })
+        if (frame % 10 === 0) {
+          setStatus(`Recording: ${frame + 1}/${totalFrames}`)
         }
+      } else {
+        // Preview: real-time pacing
+        await new Promise(r => setTimeout(r, 1000 / fps))
       }
-
-      await new Promise(r => setTimeout(r, 1000 / fps))
     }
 
     if (record) {
-      // For transparent theme, PNG frames were captured - now process them
-      if (currentTheme.transparentBackground) {
-        setStatus(`Processing ${pngFramesRef.current.length} frames...`)
-        // PNG frames will be converted in convertAndDownload
-      } else {
-        // For normal themes, stop MediaRecorder
-        mediaRecorderRef.current?.stop()
-        await new Promise<void>(r => {
-          if (mediaRecorderRef.current) {
-            mediaRecorderRef.current.onstop = () => r()
-          } else {
-            r()
-          }
-        })
-      }
-
       const container = containerRef.current!
       container.style.width = '100%'
       container.style.height = '100%'
       viewer.resize()
 
-      setIsRecording(false)
+      // Finalize: FFmpeg assembly → download
+      await finalizeRecording(frameSessionRef.current!, fps)
+      frameSessionRef.current = null
 
-      // Auto convert and download
-      setTimeout(() => {
-        convertAndDownload()
-      }, 100)
+      setIsRecording(false)
     } else {
       setIsPreview(false)
       setStatus('Preview complete')
@@ -897,7 +837,7 @@ export default function GlobeViewer() {
 
     setCloudOpacity(0)
     setProgress(100)
-  }, [currentAnimation, getAnimator, convertAndDownload, currentTheme])
+  }, [currentAnimation, getAnimator, finalizeRecording, currentTheme])
 
   const togglePause = useCallback(() => {
     isPausedRef.current = !isPausedRef.current
@@ -905,10 +845,8 @@ export default function GlobeViewer() {
 
     if (isPausedRef.current) {
       setStatus(`Paused at frame ${currentFrame + 1}`)
-      mediaRecorderRef.current?.pause()
     } else {
       setStatus(isRecording ? 'Recording...' : 'Previewing...')
-      mediaRecorderRef.current?.resume()
     }
   }, [currentFrame, isRecording])
 
