@@ -1,22 +1,25 @@
 # Earth Journey
 
-Cinematic 3D Earth flight animation from London to Shenzhen with video recording capability.
+Cinematic 3D Earth flight animation for **RIBA** (Royal Institute of British Architects) — 15 global routes converging on Shenzhen, with offline frame-by-frame video recording.
 
 ![Demo](docs/demo.gif)
 
 ## Features
 
-- Smooth camera animation using Catmull-Rom spline interpolation
-- Cinematic takeoff and landing with cloud layer effects
-- Real-time altitude display
-- 1920x1080 @ 60fps video recording
-- Pause/resume during preview and recording
-- Country borders and location markers
-- Deep space nebula background
+- **15 global flight routes** converging on Shenzhen (London, New York, Tokyo, Melbourne, etc.)
+- RIBA brand visual scheme — red/white minimalist with origami paper plane
+- Log-space Hermite spline camera interpolation for smooth altitude transitions
+- Animated flight trails with airplane icons and bilingual city labels
+- Theme system: Dark Space / Minimal Light / Transparent (alpha channel for compositing)
+- **Offline frame-by-frame recording** — `toBlob()` per frame → server FFmpeg assembly (no more stuttery `captureStream`)
+- 1920x1080 @ 60fps output: MP4 (H.264) or ProRes 4444 (with alpha)
+- Pause/resume, frame stepping, interactive timeline scrubbing
+- Country borders, location markers with destination differentiation
+- Deep space nebula background, cloud layer effects
 
 ## Demo
 
-The animation flies from **RIBA (Royal Institute of British Architects), 66 Portland Place, London** to **Shenzhen World Exhibition & Convention Center**.
+The animation flies from **RIBA, 66 Portland Place, London** to **Shenzhen World Exhibition & Convention Center**, with routes from 15 cities worldwide.
 
 ## Quick Start
 
@@ -52,10 +55,11 @@ Visit [http://localhost:3000](http://localhost:3000)
 
 ## Usage
 
-1. Click **PREVIEW** to watch the animation
-2. Click **START RECORDING** to record the animation as WebM video
-3. Click **PAUSE** to pause at any time
-4. Click **DOWNLOAD VIDEO** to save the recorded video
+1. Select animation and theme from the panel
+2. Click **PREVIEW** to watch the animation in real-time
+3. Click **START RECORDING** for offline frame capture (each frame rendered → captured → uploaded)
+4. Click **PAUSE** to pause at any time
+5. Video auto-downloads when recording completes (MP4 or ProRes 4444)
 
 ## Configuration
 
@@ -96,6 +100,7 @@ Modify `ANIMATION_CONFIG` in the same file to change:
 
 - Node.js 18+
 - Cesium Ion account (free tier works)
+- FFmpeg (for video assembly from PNG frames)
 
 ## License
 
