@@ -414,79 +414,106 @@ export default function GlobeViewer() {
       },
     })
 
-    // Location markers with pulse animation
-    addLocationMarker(Cesium, viewer, LOCATIONS.london, theme, '英国伦敦\nLondon, UK')
-    addLocationMarker(Cesium, viewer, LOCATIONS.shenzhen, theme, '中国深圳\nShenzhen, China')
-    addLocationMarker(Cesium, viewer, LOCATIONS.hongkong, theme, '香港\nHong Kong')
-    addLocationMarker(Cesium, viewer, LOCATIONS.beijing, theme, '北京\nBeijing')
-    addLocationMarker(Cesium, viewer, LOCATIONS.shanghai, theme, '上海\nShanghai')
-    addLocationMarker(Cesium, viewer, LOCATIONS.chengdu, theme, '成都\nChengdu')
-    addLocationMarker(Cesium, viewer, LOCATIONS.maryland, theme, '马里兰州\nMaryland, USA')
-    addLocationMarker(Cesium, viewer, LOCATIONS.bangalore, theme, '班加罗尔\nBangalore')
-    addLocationMarker(Cesium, viewer, LOCATIONS.singapore, theme, '新加坡\nSingapore')
-    addLocationMarker(Cesium, viewer, LOCATIONS.melbourne, theme, '墨尔本\nMelbourne')
-    addLocationMarker(Cesium, viewer, LOCATIONS.newyork, theme, '纽约\nNew York')
-    addLocationMarker(Cesium, viewer, LOCATIONS.tokyo, theme, '东京\nTokyo')
-    addLocationMarker(Cesium, viewer, LOCATIONS.bangkok, theme, '曼谷\nBangkok')
-    addLocationMarker(Cesium, viewer, LOCATIONS.rotterdam, theme, '鹿特丹\nRotterdam')
-    addLocationMarker(Cesium, viewer, LOCATIONS.madrid, theme, '马德里\nMadrid')
-    addLocationMarker(Cesium, viewer, LOCATIONS.seattle, theme, '西雅图\nSeattle')
+    // Departure city markers (white dots + RIBA red pulse)
+    addLocationMarker(Cesium, viewer, LOCATIONS.london, theme, 'LONDON, UK\n英国伦敦')
+    addLocationMarker(Cesium, viewer, LOCATIONS.hongkong, theme, 'HONG KONG\n香港')
+    addLocationMarker(Cesium, viewer, LOCATIONS.beijing, theme, 'BEIJING\n北京')
+    addLocationMarker(Cesium, viewer, LOCATIONS.shanghai, theme, 'SHANGHAI\n上海')
+    addLocationMarker(Cesium, viewer, LOCATIONS.chengdu, theme, 'CHENGDU\n成都')
+    addLocationMarker(Cesium, viewer, LOCATIONS.maryland, theme, 'MARYLAND, USA\n马里兰州')
+    addLocationMarker(Cesium, viewer, LOCATIONS.bangalore, theme, 'BANGALORE\n班加罗尔')
+    addLocationMarker(Cesium, viewer, LOCATIONS.singapore, theme, 'SINGAPORE\n新加坡')
+    addLocationMarker(Cesium, viewer, LOCATIONS.melbourne, theme, 'MELBOURNE\n墨尔本')
+    addLocationMarker(Cesium, viewer, LOCATIONS.newyork, theme, 'NEW YORK\n纽约')
+    addLocationMarker(Cesium, viewer, LOCATIONS.tokyo, theme, 'TOKYO\n东京')
+    addLocationMarker(Cesium, viewer, LOCATIONS.bangkok, theme, 'BANGKOK\n曼谷')
+    addLocationMarker(Cesium, viewer, LOCATIONS.rotterdam, theme, 'ROTTERDAM\n鹿特丹')
+    addLocationMarker(Cesium, viewer, LOCATIONS.madrid, theme, 'MADRID\n马德里')
+    addLocationMarker(Cesium, viewer, LOCATIONS.seattle, theme, 'SEATTLE\n西雅图')
+    // Destination marker (RIBA red, larger, double pulse)
+    addLocationMarker(Cesium, viewer, LOCATIONS.shenzhen, theme, 'SHENZHEN, CHINA\n中国深圳', true)
   }
 
-  function addLocationMarker(Cesium: any, viewer: any, loc: Location, theme: ThemeConfig, label: string) {
+  function addLocationMarker(Cesium: any, viewer: any, loc: Location, theme: ThemeConfig, label: string, isDestination = false) {
     const startTime = Date.now()
-    const baseColor = Cesium.Color.fromCssColorString(theme.marker.color)
+    const destConfig = theme.destinationMarker || theme.marker
+    const markerColor = isDestination
+      ? Cesium.Color.fromCssColorString(destConfig.color)
+      : Cesium.Color.fromCssColorString(theme.marker.color)
+    const pulseColor = Cesium.Color.fromCssColorString(theme.marker.outlineColor)
+    const dotSize = isDestination ? 8 : 4
 
-    // Main marker with pulse animation
+    // Main marker dot
     viewer.entities.add({
       position: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, 50),
       point: {
         pixelSize: new Cesium.CallbackProperty(() => {
           const t = (Date.now() - startTime) / 1000
-          const pulse = Math.sin(t * 2) * 0.15 + 1 // Oscillate between 0.85 and 1.15
-          return 12 * pulse
+          const pulse = Math.sin(t * 2) * 0.15 + 1
+          return dotSize * pulse
         }, false),
-        color: new Cesium.CallbackProperty(() => {
-          const t = (Date.now() - startTime) / 1000
-          const pulse = Math.sin(t * 2) * 0.2 + 0.8 // Oscillate alpha between 0.6 and 1.0
-          return baseColor.withAlpha(pulse)
-        }, false),
-        outlineColor: Cesium.Color.fromCssColorString(theme.marker.outlineColor),
-        outlineWidth: 2,
+        color: markerColor,
+        outlineColor: isDestination
+          ? Cesium.Color.fromCssColorString(destConfig.outlineColor)
+          : pulseColor,
+        outlineWidth: isDestination ? 3 : 2,
         disableDepthTestDistance: 1.2e6,
       },
       label: {
         text: label,
-        font: 'bold 22px sans-serif',
+        font: 'bold 14px "Helvetica Neue", Helvetica, Arial, sans-serif',
         fillColor: Cesium.Color.WHITE,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 3,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        pixelOffset: new Cesium.Cartesian2(0, -32),
+        style: Cesium.LabelStyle.FILL,
+        showBackground: true,
+        backgroundColor: new Cesium.Color(0.07, 0.07, 0.07, 0.8), // #111111
+        backgroundPadding: new Cesium.Cartesian2(8, 4),
+        pixelOffset: new Cesium.Cartesian2(0, -20),
         disableDepthTestDistance: 1.2e6,
         scaleByDistance: new Cesium.NearFarScalar(500, 1.2, 5000000, 0.6),
       },
     })
 
-    // Outer pulse ring (expanding circle effect)
+    // Pulse ring 1 (RIBA red expanding)
     viewer.entities.add({
       position: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, 50),
       point: {
         pixelSize: new Cesium.CallbackProperty(() => {
           const t = (Date.now() - startTime) / 1000
-          const cycle = (t % 2) / 2 // 0 to 1 over 2 seconds
-          return 12 + cycle * 20 // Expand from 12 to 32
+          const cycle = (t % 2) / 2
+          return dotSize + cycle * (isDestination ? 24 : 12)
         }, false),
         color: new Cesium.CallbackProperty(() => {
           const t = (Date.now() - startTime) / 1000
-          const cycle = (t % 2) / 2 // 0 to 1 over 2 seconds
-          const alpha = 0.6 * (1 - cycle) // Fade out as it expands
-          return baseColor.withAlpha(alpha)
+          const cycle = (t % 2) / 2
+          const alpha = 0.8 * (1 - cycle)
+          return pulseColor.withAlpha(alpha)
         }, false),
         outlineWidth: 0,
         disableDepthTestDistance: 1.2e6,
       },
     })
+
+    // Destination gets a second pulse ring (white, offset phase)
+    if (isDestination) {
+      viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, 50),
+        point: {
+          pixelSize: new Cesium.CallbackProperty(() => {
+            const t = (Date.now() - startTime) / 1000
+            const cycle = ((t + 1) % 2) / 2 // offset by 1s
+            return 8 + cycle * 30
+          }, false),
+          color: new Cesium.CallbackProperty(() => {
+            const t = (Date.now() - startTime) / 1000
+            const cycle = ((t + 1) % 2) / 2
+            const alpha = 0.5 * (1 - cycle)
+            return Cesium.Color.WHITE.withAlpha(alpha)
+          }, false),
+          outlineWidth: 0,
+          disableDepthTestDistance: 1.2e6,
+        },
+      })
+    }
   }
 
   async function loadCountryBorders(Cesium: any, viewer: any, theme: ThemeConfig) {

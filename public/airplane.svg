@@ -1,6 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <g transform="rotate(0 32 32)">
-    <!-- Fuselage -->
-    <path d="M32 4 L28 24 L12 32 L28 30 L28 48 L22 54 L28 52 L32 58 L36 52 L42 54 L36 48 L36 30 L52 32 L36 24 Z" fill="white" stroke="#333" stroke-width="1.5" stroke-linejoin="round"/>
-  </g>
+  <!-- Origami paper plane — nose pointing UP -->
+  <!-- Left wing (slightly shadowed to show fold) -->
+  <path d="M32 4 L8 52 L32 40 Z" fill="rgba(255,255,255,0.78)"/>
+  <!-- Right wing (bright face) -->
+  <path d="M32 4 L56 52 L32 40 Z" fill="white"/>
+  <!-- Tail keel -->
+  <path d="M30 40 L32 58 L34 40 Z" fill="rgba(255,255,255,0.9)"/>
 </svg>

@@ -68,8 +68,8 @@ export class GlobeLineAnimator {
         progress = 1
       } else {
         progress = (time - lineStartTime) / line.duration
-        // Use same easing as line for sync
-        progress = this.easeOutCubic(progress)
+        // Use linear for constant speed animation
+        progress = this.linear(progress)
       }
 
       // Interpolate camera position along the line
@@ -117,8 +117,8 @@ export class GlobeLineAnimator {
         progress = 1
       } else {
         progress = (time - lineStartTime) / line.duration
-        // Apply easing
-        progress = this.easeOutCubic(progress)
+        // Use linear for constant speed
+        progress = this.linear(progress)
       }
 
       states.push({
@@ -131,6 +131,16 @@ export class GlobeLineAnimator {
     }
 
     return states
+  }
+
+  // Linear - constant speed
+  private linear(t: number): number {
+    return t
+  }
+
+  // Smooth start and end, constant middle
+  private easeInOutSine(t: number): number {
+    return -(Math.cos(Math.PI * t) - 1) / 2
   }
 
   private easeOutCubic(t: number): number {

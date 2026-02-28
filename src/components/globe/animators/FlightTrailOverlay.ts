@@ -22,9 +22,9 @@ export const DEFAULT_TRAIL_CONFIG: TrailConfig = {
   to: { lat: 22.6815, lon: 113.839, name: 'Shenzhen' },
   arcHeight: 1.0,
   numPoints: 200,
-  lineColor: '#fbbf24',
-  lineWidth: 3,
-  glowColor: '#fbbf24',
+  lineColor: '#ffffff',
+  lineWidth: 2,
+  glowColor: '#C1272D',
   glowWidth: 8,
   airplaneScale: 1.2,
   airplaneImage: '/airplane.svg',
@@ -97,8 +97,8 @@ export class FlightTrailOverlay {
       polyline: {
         positions: new Cesium.CallbackProperty(() => this.trailPositions, false),
         width: this.config.glowWidth,
-        material: Cesium.Color.fromCssColorString(this.config.glowColor).withAlpha(0.3),
-        depthFailMaterial: Cesium.Color.fromCssColorString(this.config.glowColor).withAlpha(0.15),
+        material: Cesium.Color.fromCssColorString(this.config.glowColor).withAlpha(0.6),
+        depthFailMaterial: Cesium.Color.fromCssColorString(this.config.glowColor).withAlpha(0.3),
       },
     })
 
@@ -113,7 +113,9 @@ export class FlightTrailOverlay {
     })
 
     // Airplane billboard + origin label on same entity
-    const originLabel = this.config.from.nameZh || this.config.from.name
+    const nameEn = this.config.from.name.toUpperCase()
+    const nameCn = this.config.from.nameZh || ''
+    const originLabel = nameCn ? `${nameEn}\n${nameCn}` : nameEn
     this.airplaneEntity = viewer.entities.add({
       position: new Cesium.CallbackProperty(() => {
         if (this.trailPositions.length === 0) return this.allPoints[0]
@@ -128,18 +130,16 @@ export class FlightTrailOverlay {
       },
       label: {
         text: originLabel,
-        font: 'bold 14px sans-serif',
+        font: 'bold 14px "Helvetica Neue", Helvetica, Arial, sans-serif',
         fillColor: Cesium.Color.WHITE,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 2,
+        style: Cesium.LabelStyle.FILL,
         showBackground: true,
-        backgroundColor: new Cesium.Color(0.165, 0.165, 0.165, 0.7),
-        backgroundPadding: new Cesium.Cartesian2(7, 5),
+        backgroundColor: new Cesium.Color(0.54, 0.11, 0.13, 0.85), // #8A1C20
+        backgroundPadding: new Cesium.Cartesian2(10, 6),
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
         verticalOrigin: Cesium.VerticalOrigin.TOP,
-        pixelOffset: new Cesium.Cartesian2(0, 20),
-        scaleByDistance: new Cesium.NearFarScalar(1000, 1.0, 13000000, 0.4),
+        pixelOffset: new Cesium.Cartesian2(0, 22),
+        scaleByDistance: new Cesium.NearFarScalar(1000, 1.2, 13000000, 0.5),
         disableDepthTestDistance: 1.2e6,
       },
     })
