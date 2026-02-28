@@ -126,7 +126,7 @@ export class FlightTrailOverlay {
         scale: this.config.airplaneScale,
         alignedAxis: new Cesium.CallbackProperty(() => this.getFlightDirection(), false),
         scaleByDistance: new Cesium.NearFarScalar(1000, 2.0, 13000000, 0.4),
-        disableDepthTestDistance: 1.2e6,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
       label: {
         text: originLabel,
@@ -138,9 +138,9 @@ export class FlightTrailOverlay {
         backgroundPadding: new Cesium.Cartesian2(10, 6),
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
         verticalOrigin: Cesium.VerticalOrigin.TOP,
-        pixelOffset: new Cesium.Cartesian2(0, 22),
+        pixelOffset: new Cesium.Cartesian2(0, 28),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY, // always render above polylines
         scaleByDistance: new Cesium.NearFarScalar(1000, 1.2, 13000000, 0.5),
-        disableDepthTestDistance: 1.2e6,
       },
     })
   }

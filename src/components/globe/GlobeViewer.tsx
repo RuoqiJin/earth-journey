@@ -467,8 +467,8 @@ export default function GlobeViewer() {
         showBackground: true,
         backgroundColor: new Cesium.Color(0.07, 0.07, 0.07, 0.8), // #111111
         backgroundPadding: new Cesium.Cartesian2(8, 4),
-        pixelOffset: new Cesium.Cartesian2(0, -20),
-        disableDepthTestDistance: 1.2e6,
+        pixelOffset: new Cesium.Cartesian2(0, -45),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY, // always render above polylines
         scaleByDistance: new Cesium.NearFarScalar(500, 1.2, 5000000, 0.6),
       },
     })
