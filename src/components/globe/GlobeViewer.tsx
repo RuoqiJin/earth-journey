@@ -394,7 +394,7 @@ export default function GlobeViewer() {
         outlineColor: Cesium.Color.fromCssColorString(theme.label.outlineColor),
         outlineWidth: theme.label.outlineWidth,
         style: theme.label.outlineWidth > 0 ? Cesium.LabelStyle.FILL_AND_OUTLINE : Cesium.LabelStyle.FILL,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        disableDepthTestDistance: 1.2e6,
         scaleByDistance: new Cesium.NearFarScalar(1000000, 1.5, 15000000, 0.4),
       },
     })
@@ -409,7 +409,7 @@ export default function GlobeViewer() {
         outlineColor: Cesium.Color.fromCssColorString(theme.label.outlineColor),
         outlineWidth: theme.label.outlineWidth,
         style: theme.label.outlineWidth > 0 ? Cesium.LabelStyle.FILL_AND_OUTLINE : Cesium.LabelStyle.FILL,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        disableDepthTestDistance: 1.2e6,
         scaleByDistance: new Cesium.NearFarScalar(1000000, 1.5, 15000000, 0.4),
       },
     })
@@ -420,6 +420,17 @@ export default function GlobeViewer() {
     addLocationMarker(Cesium, viewer, LOCATIONS.hongkong, theme, '香港\nHong Kong')
     addLocationMarker(Cesium, viewer, LOCATIONS.beijing, theme, '北京\nBeijing')
     addLocationMarker(Cesium, viewer, LOCATIONS.shanghai, theme, '上海\nShanghai')
+    addLocationMarker(Cesium, viewer, LOCATIONS.chengdu, theme, '成都\nChengdu')
+    addLocationMarker(Cesium, viewer, LOCATIONS.maryland, theme, '马里兰州\nMaryland, USA')
+    addLocationMarker(Cesium, viewer, LOCATIONS.bangalore, theme, '班加罗尔\nBangalore')
+    addLocationMarker(Cesium, viewer, LOCATIONS.singapore, theme, '新加坡\nSingapore')
+    addLocationMarker(Cesium, viewer, LOCATIONS.melbourne, theme, '墨尔本\nMelbourne')
+    addLocationMarker(Cesium, viewer, LOCATIONS.newyork, theme, '纽约\nNew York')
+    addLocationMarker(Cesium, viewer, LOCATIONS.tokyo, theme, '东京\nTokyo')
+    addLocationMarker(Cesium, viewer, LOCATIONS.bangkok, theme, '曼谷\nBangkok')
+    addLocationMarker(Cesium, viewer, LOCATIONS.rotterdam, theme, '鹿特丹\nRotterdam')
+    addLocationMarker(Cesium, viewer, LOCATIONS.madrid, theme, '马德里\nMadrid')
+    addLocationMarker(Cesium, viewer, LOCATIONS.seattle, theme, '西雅图\nSeattle')
   }
 
   function addLocationMarker(Cesium: any, viewer: any, loc: Location, theme: ThemeConfig, label: string) {
@@ -442,7 +453,7 @@ export default function GlobeViewer() {
         }, false),
         outlineColor: Cesium.Color.fromCssColorString(theme.marker.outlineColor),
         outlineWidth: 2,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        disableDepthTestDistance: 1.2e6,
       },
       label: {
         text: label,
@@ -452,7 +463,7 @@ export default function GlobeViewer() {
         outlineWidth: 3,
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
         pixelOffset: new Cesium.Cartesian2(0, -32),
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        disableDepthTestDistance: 1.2e6,
         scaleByDistance: new Cesium.NearFarScalar(500, 1.2, 5000000, 0.6),
       },
     })
@@ -473,7 +484,7 @@ export default function GlobeViewer() {
           return baseColor.withAlpha(alpha)
         }, false),
         outlineWidth: 0,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        disableDepthTestDistance: 1.2e6,
       },
     })
   }
@@ -749,6 +760,17 @@ export default function GlobeViewer() {
         { from: LOCATIONS.hongkong, to: LOCATIONS.shenzhen },
         { from: LOCATIONS.beijing, to: LOCATIONS.shenzhen },
         { from: LOCATIONS.shanghai, to: LOCATIONS.shenzhen },
+        { from: LOCATIONS.chengdu, to: LOCATIONS.shenzhen },
+        { from: LOCATIONS.maryland, to: LOCATIONS.shenzhen },
+        { from: LOCATIONS.bangalore, to: LOCATIONS.shenzhen },
+        { from: LOCATIONS.singapore, to: LOCATIONS.shenzhen },
+        { from: LOCATIONS.melbourne, to: LOCATIONS.shenzhen },
+        { from: LOCATIONS.newyork, to: LOCATIONS.shenzhen },
+        { from: LOCATIONS.tokyo, to: LOCATIONS.shenzhen },
+        { from: LOCATIONS.bangkok, to: LOCATIONS.shenzhen },
+        { from: LOCATIONS.rotterdam, to: LOCATIONS.shenzhen },
+        { from: LOCATIONS.madrid, to: LOCATIONS.shenzhen },
+        { from: LOCATIONS.seattle, to: LOCATIONS.shenzhen },
       ]
       trailOverlaysRef.current = routes.map(r => {
         const overlay = new FlightTrailOverlay(viewer, Cesium, {

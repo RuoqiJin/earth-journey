@@ -122,7 +122,8 @@ export class FlightTrailOverlay {
         image: this.config.airplaneImage,
         scale: this.config.airplaneScale,
         alignedAxis: new Cesium.CallbackProperty(() => this.getFlightDirection(), false),
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        scaleByDistance: new Cesium.NearFarScalar(1000, 2.0, 13000000, 0.4),
+        disableDepthTestDistance: 1.2e6,
       },
     })
   }
