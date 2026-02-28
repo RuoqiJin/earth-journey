@@ -98,17 +98,15 @@ export class FlightTrailOverlay {
         positions: new Cesium.CallbackProperty(() => this.trailPositions, false),
         width: this.config.glowWidth,
         material: Cesium.Color.fromCssColorString(this.config.glowColor).withAlpha(0.6),
-        depthFailMaterial: Cesium.Color.fromCssColorString(this.config.glowColor).withAlpha(0.3),
       },
     })
 
-    // Core trail line
+    // Core trail line (alpha 0.99 → TRANSLUCENT pass → depthMask:false → won't occlude labels)
     this.trailEntity = viewer.entities.add({
       polyline: {
         positions: new Cesium.CallbackProperty(() => this.trailPositions, false),
         width: this.config.lineWidth,
-        material: Cesium.Color.fromCssColorString(this.config.lineColor),
-        depthFailMaterial: Cesium.Color.fromCssColorString(this.config.lineColor).withAlpha(0.5),
+        material: Cesium.Color.fromCssColorString(this.config.lineColor).withAlpha(0.99),
       },
     })
 
@@ -126,7 +124,7 @@ export class FlightTrailOverlay {
         scale: this.config.airplaneScale,
         alignedAxis: new Cesium.CallbackProperty(() => this.getFlightDirection(), false),
         scaleByDistance: new Cesium.NearFarScalar(1000, 2.0, 13000000, 0.4),
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        disableDepthTestDistance: 1.2e6,
       },
       label: {
         text: originLabel,
@@ -139,7 +137,7 @@ export class FlightTrailOverlay {
         horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
         verticalOrigin: Cesium.VerticalOrigin.TOP,
         pixelOffset: new Cesium.Cartesian2(0, 28),
-        disableDepthTestDistance: Number.POSITIVE_INFINITY, // always render above polylines
+        disableDepthTestDistance: 1.2e6,
         scaleByDistance: new Cesium.NearFarScalar(1000, 1.2, 13000000, 0.5),
       },
     })
