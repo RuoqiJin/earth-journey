@@ -112,7 +112,8 @@ export class FlightTrailOverlay {
       },
     })
 
-    // Airplane billboard
+    // Airplane billboard + origin label on same entity
+    const originLabel = this.config.from.nameZh || this.config.from.name
     this.airplaneEntity = viewer.entities.add({
       position: new Cesium.CallbackProperty(() => {
         if (this.trailPositions.length === 0) return this.allPoints[0]
@@ -123,6 +124,22 @@ export class FlightTrailOverlay {
         scale: this.config.airplaneScale,
         alignedAxis: new Cesium.CallbackProperty(() => this.getFlightDirection(), false),
         scaleByDistance: new Cesium.NearFarScalar(1000, 2.0, 13000000, 0.4),
+        disableDepthTestDistance: 1.2e6,
+      },
+      label: {
+        text: originLabel,
+        font: 'bold 14px sans-serif',
+        fillColor: Cesium.Color.WHITE,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        outlineColor: Cesium.Color.BLACK,
+        outlineWidth: 2,
+        showBackground: true,
+        backgroundColor: new Cesium.Color(0.165, 0.165, 0.165, 0.7),
+        backgroundPadding: new Cesium.Cartesian2(7, 5),
+        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        verticalOrigin: Cesium.VerticalOrigin.TOP,
+        pixelOffset: new Cesium.Cartesian2(0, 20),
+        scaleByDistance: new Cesium.NearFarScalar(1000, 1.0, 13000000, 0.4),
         disableDepthTestDistance: 1.2e6,
       },
     })
